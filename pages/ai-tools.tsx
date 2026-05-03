@@ -7,7 +7,7 @@ import { usePlatform, PLATFORMS } from '../contexts/PlatformContext'
 import { AIBadge, ScoreRing, Spinner, TabBar } from '../components/ui'
 import axios from 'axios'
 import toast from 'react-hot-toast'
-import { FiCopy, FiRefreshCw, FiZap, FiType, FiHash, FiAlignLeft, FiCheckCircle } from 'react-icons/fi'
+import { FiCopy, FiZap, FiAlertCircle } from 'react-icons/fi'
 
 type Tool = 'titles' | 'description' | 'hashtags' | 'ideas'
 
@@ -16,20 +16,15 @@ function AIToolsPage() {
   const activePlt = PLATFORMS.find(p => p.code === activePlatform)!
   const [tool, setTool] = useState<Tool>('titles')
 
-  // Shared inputs
   const [topic, setTopic] = useState('')
   const [keywords, setKeywords] = useState('')
   const [tone, setTone] = useState('engaging')
-
-  // SEO inputs
-
-  // Results
   const [results, setResults] = useState<any>(null)
   const [loading, setLoading] = useState(false)
 
   const copy = (text: string) => {
     navigator.clipboard.writeText(text)
-    toast.success('Copied to clipboard!')
+    toast.success('Copied!')
   }
 
   const runTool = async () => {
@@ -37,8 +32,8 @@ function AIToolsPage() {
     setLoading(true)
     setResults(null)
     try {
-      let res
       const kwArr = keywords.split(',').map(k => k.trim()).filter(Boolean)
+      let res
       switch (tool) {
         case 'titles':
           res = await axios.post('/api/ai/titles', { topic, platform: activePlt.name, keywords: kwArr, style: tone })
@@ -49,19 +44,13 @@ function AIToolsPage() {
         case 'hashtags':
           res = await axios.post('/api/ai/hashtags', { topic, platform: activePlt.name, count: 10 })
           break
-        case 'seo':
-          res = await axios.post('/api/ai/seo', {
-            title: seoTitle, description: seoDesc, platform: activePlt.name,
-            tags: seoTags.split(',').map(t => t.trim()).filter(Boolean)
-          })
-          break
         case 'ideas':
           res = await axios.post('/api/ai/ideas', { niche: topic, platform: activePlt.name, count: 8, audience: 'general' })
           break
       }
       setResults(res?.data)
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'AI generation failed')
+      toast.error(err.response?.data?.error || 'Generation failed')
     } finally {
       setLoading(false)
     }
@@ -71,9 +60,10 @@ function AIToolsPage() {
     { label: '📝 Titles', value: 'titles' },
     { label: '📄 Description', value: 'description' },
     { label: '#️⃣ Hashtags', value: 'hashtags' },
-    
     { label: '💡 Content Ideas', value: 'ideas' },
   ]
+
+  const isYT = activePlatform === 'yt'
 
   return (
     <DashboardLayout title="AI Tools">
@@ -83,7 +73,7 @@ function AIToolsPage() {
                         border border-cyan/20 flex items-center justify-center text-cyan text-xl">✦</div>
           <div>
             <h1 className="text-xl font-bold">AI Content Tools</h1>
-            <p className="text-muted text-sm">Powered by Google Gemini AI</p>
+            <p className="text-muted text-sm">Generate optimized content with AI</p>
           </div>
           <AIBadge />
         </div>
@@ -98,54 +88,39 @@ function AIToolsPage() {
               <FiZap size={16} className="text-cyan" /> Input
             </h3>
 
-            {tool === 'seo' ? (
-              <>
-                <div>
-                  <label className="label">Title *</label>
-                  <input className="inp" value={seoTitle} onChange={e => setSeoTitle(e.target.value)}
-                    placeholder="Your video/post title..." />
-                </div>
-                <div>
-                  <label className="label">Description</label>
-                  <textarea className="inp min-h-24 resize-none" value={seoDesc}
-                    onChange={e => setSeoDesc(e.target.value)} placeholder="Your description..." />
-                </div>
-                <div>
-                  <label className="label">Tags (comma separated)</label>
-                  <input className="inp" value={seoTags} onChange={e => setSeoTags(e.target.value)}
-                    placeholder="tag1, tag2, tag3..." />
-                </div>
-              </>
-            ) : (
-              <>
-                <div>
-                  <label className="label">
-                    {tool === 'ideas' ? 'Your Niche' : tool === 'description' ? 'Video/Post Title' : 'Topic or Keyword'} *
-                  </label>
-                  <input className="inp" value={topic} onChange={e => setTopic(e.target.value)}
-                    placeholder={
-                      tool === 'ideas' ? 'e.g. personal finance, fitness, cooking...' :
-                      tool === 'description' ? 'e.g. How to invest $1000 in 2026' :
-                      'e.g. how to make money online'
-                    } />
-                </div>
-                <div>
-                  <label className="label">Keywords (optional, comma separated)</label>
-                  <input className="inp" value={keywords} onChange={e => setKeywords(e.target.value)}
-                    placeholder="keyword1, keyword2, keyword3..." />
-                </div>
-                <div>
-                  <label className="label">Tone / Style</label>
-                  <select className="inp bg-surf2" value={tone} onChange={e => setTone(e.target.value)}>
-                    <option value="engaging">Engaging & Entertaining</option>
-                    <option value="professional">Professional & Authoritative</option>
-                    <option value="educational">Educational & Informative</option>
-                    <option value="conversational">Conversational & Friendly</option>
-                    <option value="viral">Viral & Click-worthy</option>
-                    <option value="storytelling">Storytelling & Narrative</option>
-                  </select>
-                </div>
-              </>
+            <div>
+              <label className="label">
+                {tool === 'ideas' ? 'Your Niche' :
+                 tool === 'description' ? 'Video / Post Title' : 'Topic or Keyword'} *
+              </label>
+              <input className="inp" value={topic} onChange={e => setTopic(e.target.value)}
+                placeholder={
+                  tool === 'ideas' ? 'e.g. personal finance, fitness, cooking...' :
+                  tool === 'description' ? 'e.g. How to invest $1000 in 2026' :
+                  'e.g. how to make money online'
+                } />
+            </div>
+
+            {tool !== 'hashtags' && tool !== 'ideas' && (
+              <div>
+                <label className="label">Keywords (optional, comma separated)</label>
+                <input className="inp" value={keywords} onChange={e => setKeywords(e.target.value)}
+                  placeholder="keyword1, keyword2, keyword3..." />
+              </div>
+            )}
+
+            {(tool === 'titles' || tool === 'description') && (
+              <div>
+                <label className="label">Tone / Style</label>
+                <select className="inp bg-surf2" value={tone} onChange={e => setTone(e.target.value)}>
+                  <option value="engaging">Engaging & Entertaining</option>
+                  <option value="professional">Professional & Authoritative</option>
+                  <option value="educational">Educational & Informative</option>
+                  <option value="conversational">Conversational & Friendly</option>
+                  <option value="viral">Viral & Click-worthy</option>
+                  <option value="storytelling">Storytelling & Narrative</option>
+                </select>
+              </div>
             )}
 
             <div>
@@ -157,10 +132,29 @@ function AIToolsPage() {
               </div>
             </div>
 
+            {/* YouTube title hint */}
+            {tool === 'titles' && isYT && (
+              <div className="flex items-start gap-2 p-3 bg-gold/5 border border-gold/20 rounded-xl">
+                <FiAlertCircle size={14} className="text-gold flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-gold/80">
+                  Generating 5 titles optimized for YouTube SEO — 55–70 characters each for maximum ranking potential.
+                </p>
+              </div>
+            )}
+
+            {tool === 'hashtags' && (
+              <div className="flex items-start gap-2 p-3 bg-cyan/5 border border-cyan/20 rounded-xl">
+                <span className="text-cyan text-sm">#</span>
+                <p className="text-xs text-cyan/80">
+                  Generates 10 hashtags: high-volume, medium, and niche — optimized for {activePlt.name}.
+                </p>
+              </div>
+            )}
+
             <button onClick={runTool} disabled={loading}
               className="btn btn-cyan w-full justify-center gap-2">
               {loading ? <Spinner size={16} /> : <FiZap size={15} />}
-              {loading ? 'Generating with Gemini AI...' : 'Generate with AI →'}
+              {loading ? 'Generating...' : 'Generate with AI →'}
             </button>
           </div>
 
@@ -174,52 +168,69 @@ function AIToolsPage() {
             {loading && (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <div className="loading-dots flex justify-center mb-4"><span /><span /><span /></div>
-                <p className="text-muted text-sm">Gemini AI is generating your content...</p>
+                <p className="text-muted text-sm">Generating your content...</p>
               </div>
             )}
 
             {!loading && !results && (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <div className="text-4xl mb-3">✦</div>
-                <p className="text-muted text-sm">Fill in the inputs and click Generate to see AI results</p>
+                <p className="text-muted text-sm">Fill in the topic and click Generate</p>
               </div>
             )}
 
-            {/* TITLES Results */}
+            {/* TITLES */}
             {!loading && results?.titles && (
               <div className="space-y-2">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs text-muted">{results.titles.length} titles generated</span>
+                  <button onClick={() => copy(results.titles.map((t: any) => t.title).join('\n'))}
+                    className="btn btn-ghost btn-sm gap-1.5 text-xs">
+                    <FiCopy size={11} /> Copy All
+                  </button>
+                </div>
                 {results.titles.map((t: any, i: number) => (
-                  <motion.div key={i} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+                  <motion.div key={i}
+                    initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: i * 0.05 }}
                     className="flex items-start gap-3 p-3 bg-surf2 rounded-xl border border-white/5
                                hover:border-white/10 transition-colors group">
+                    <div className="w-5 h-5 rounded-full bg-surf3 flex items-center justify-center
+                                  text-[10px] font-bold text-muted flex-shrink-0 mt-0.5">{i + 1}</div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-white leading-snug">{t.title}</p>
-                      <div className="flex items-center gap-2 mt-1.5">
-                        <span className="badge-cyan text-[9px]">{t.type}</span>
-                        <span className="text-[10px] text-muted">Score: <span className="text-cyan font-bold">{t.score}</span></span>
+                      <p className="text-sm text-white leading-snug mb-1">{t.title}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-muted border border-white/10">
+                          {t.type}
+                        </span>
+                        <span className="text-[10px] text-muted">
+                          Score: <span className="text-cyan font-bold">{t.score}</span>
+                        </span>
+                        <span className={`text-[10px] font-semibold ${
+                          t.title?.length >= 55 && t.title?.length <= 70 ? 'text-green' :
+                          t.title?.length >= 40 ? 'text-gold' : 'text-red/70'
+                        }`}>
+                          {t.title?.length || 0} chars
+                        </span>
                       </div>
                     </div>
                     <button onClick={() => copy(t.title)}
-                      className="opacity-0 group-hover:opacity-100 text-muted hover:text-white transition-all">
+                      className="opacity-0 group-hover:opacity-100 text-muted hover:text-white transition-all flex-shrink-0">
                       <FiCopy size={14} />
                     </button>
                   </motion.div>
                 ))}
-                <button onClick={() => copy(results.titles.map((t: any) => t.title).join('\n'))}
-                  className="btn btn-ghost btn-sm w-full justify-center gap-1.5 mt-2">
-                  <FiCopy size={12} /> Copy All Titles
-                </button>
               </div>
             )}
 
-            {/* DESCRIPTION Results */}
+            {/* DESCRIPTION */}
             {!loading && results?.description && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                 <div className="relative">
                   <pre className="text-sm text-white/80 whitespace-pre-wrap leading-relaxed bg-surf2
-                                 p-4 rounded-xl border border-white/5 max-h-96 overflow-y-auto
-                                 font-sans">{results.description}</pre>
+                                 p-4 rounded-xl border border-white/5 max-h-96 overflow-y-auto font-sans">
+                    {results.description}
+                  </pre>
                   <button onClick={() => copy(results.description)}
                     className="absolute top-3 right-3 btn btn-ghost btn-sm gap-1.5">
                     <FiCopy size={12} /> Copy
@@ -228,14 +239,21 @@ function AIToolsPage() {
               </motion.div>
             )}
 
-            {/* HASHTAGS Results */}
+            {/* HASHTAGS */}
             {!loading && results?.hashtags && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs text-muted">{results.hashtags.length} hashtags</span>
+                  <button onClick={() => copy(results.hashtags.map((h: any) => h.tag).join(' '))}
+                    className="btn btn-ghost btn-sm gap-1.5 text-xs">
+                    <FiCopy size={11} /> Copy All
+                  </button>
+                </div>
                 <div className="flex flex-wrap gap-2 mb-4">
                   {results.hashtags.map((h: any, i: number) => (
                     <button key={i} onClick={() => copy(h.tag)}
-                      className={`px-2.5 py-1 rounded-full text-sm font-semibold transition-all
-                                 hover:scale-105 ${
+                      className={`px-3 py-1.5 rounded-full text-sm font-semibold transition-all
+                                 hover:scale-105 active:scale-95 ${
                         h.volume === 'high' ? 'bg-cyan/10 text-cyan border border-cyan/20' :
                         h.volume === 'medium' ? 'bg-gold/10 text-gold border border-gold/20' :
                         'bg-white/5 text-white/60 border border-white/10'
@@ -244,92 +262,44 @@ function AIToolsPage() {
                     </button>
                   ))}
                 </div>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-4">
                   {['high', 'medium', 'niche'].map(v => (
-                    <div key={v} className={`text-xs flex items-center gap-1 ${
+                    <div key={v} className={`text-xs flex items-center gap-1.5 ${
                       v === 'high' ? 'text-cyan' : v === 'medium' ? 'text-gold' : 'text-muted'}`}>
                       <div className={`w-2 h-2 rounded-full ${
                         v === 'high' ? 'bg-cyan' : v === 'medium' ? 'bg-gold' : 'bg-white/20'}`} />
                       {v}
                     </div>
                   ))}
-                  <button onClick={() => copy(results.hashtags.map((h: any) => h.tag).join(' '))}
-                    className="btn btn-ghost btn-sm gap-1.5 ml-auto">
-                    <FiCopy size={12} /> Copy All
-                  </button>
                 </div>
               </motion.div>
             )}
 
-            {/* SEO Results */}
-            {!loading && results?.score !== undefined && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-                <div className="flex items-center gap-6">
-                  <ScoreRing score={results.score} label="Overall SEO" size={90} />
-                  <ScoreRing score={results.viralScore || 70} label="Viral Score" size={90} color="#ff0090" />
-                  <div className="flex-1 space-y-2">
-                    <div className="text-sm">
-                      <div className="flex justify-between mb-1">
-                        <span className="text-muted text-xs">Title</span>
-                        <span className="text-cyan text-xs font-bold">{results.titleScore}%</span>
-                      </div>
-                      <div className="progress"><div className="progress-fill bg-cyan" style={{ width: `${results.titleScore}%` }} /></div>
-                    </div>
-                    <div className="text-sm">
-                      <div className="flex justify-between mb-1">
-                        <span className="text-muted text-xs">Description</span>
-                        <span className="text-magenta text-xs font-bold">{results.descriptionScore}%</span>
-                      </div>
-                      <div className="progress"><div className="progress-fill bg-magenta" style={{ width: `${results.descriptionScore}%` }} /></div>
-                    </div>
-                    <div className="text-sm">
-                      <div className="flex justify-between mb-1">
-                        <span className="text-muted text-xs">Tags</span>
-                        <span className="text-green text-xs font-bold">{results.tagsScore}%</span>
-                      </div>
-                      <div className="progress"><div className="progress-fill bg-green" style={{ width: `${results.tagsScore}%` }} /></div>
-                    </div>
-                  </div>
-                </div>
-                {results.suggestions?.length > 0 && (
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-muted mb-2">Suggestions</p>
-                    <ul className="space-y-1.5">
-                      {results.suggestions.map((s: string, i: number) => (
-                        <li key={i} className="flex items-start gap-2 text-sm text-white/70">
-                          <span className="text-cyan mt-0.5 flex-shrink-0">→</span> {s}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </motion.div>
-            )}
-
-            {/* IDEAS Results */}
+            {/* IDEAS */}
             {!loading && results?.ideas && (
               <div className="space-y-3">
                 {results.ideas.map((idea: any, i: number) => (
-                  <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                  <motion.div key={i}
+                    initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.05 }}
                     className="p-3 bg-surf2 rounded-xl border border-white/5">
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <p className="text-sm font-semibold text-white leading-snug">{idea.title}</p>
-                      <span className="badge-cyan text-[9px] flex-shrink-0">{idea.viralScore}</span>
+                      <span className="text-xs font-bold text-cyan flex-shrink-0">{idea.viralScore}</span>
                     </div>
                     <p className="text-xs text-muted mb-2">{idea.hook}</p>
                     <div className="flex items-center gap-3 text-[10px] text-muted">
                       <span>📅 {idea.bestPostingTime}</span>
                       <span>📊 {idea.estimatedViews}</span>
-                      <span className={`font-bold ${idea.difficulty === 'Easy' ? 'text-green' : idea.difficulty === 'Hard' ? 'text-red' : 'text-gold'}`}>
-                        {idea.difficulty}
-                      </span>
+                      <span className={`font-bold ${
+                        idea.difficulty === 'Easy' ? 'text-green' :
+                        idea.difficulty === 'Hard' ? 'text-red' : 'text-gold'
+                      }`}>{idea.difficulty}</span>
                     </div>
                   </motion.div>
                 ))}
               </div>
             )}
-
           </div>
         </div>
       </div>

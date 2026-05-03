@@ -7,9 +7,10 @@ import { usePlatform, PLATFORMS } from '../contexts/PlatformContext'
 import { ScoreRing, AIBadge, Spinner } from '../components/ui'
 import axios from 'axios'
 import toast from 'react-hot-toast'
-import { FiUpload, FiCheck, FiAlertCircle, FiArrowRight, FiArrowLeft, FiZap } from 'react-icons/fi'
+import { FiUpload, FiCheck, FiAlertCircle, FiArrowRight, FiArrowLeft, FiZap, FiLock } from 'react-icons/fi'
 import { useAuth } from '../contexts/AuthContext'
 import { saveUpload } from '../services/firestore'
+import Link from 'next/link'
 
 const STEPS = ['Platform', 'Details', 'AI Optimize', 'SEO Scan', 'Review']
 
@@ -33,7 +34,7 @@ interface SeoResult {
 }
 
 function UploadPage() {
-  const { activePlatform, setActivePlatform } = usePlatform()
+  const { activePlatform, setActivePlatform, isConnected } = usePlatform()
   const { user } = useAuth()
   const [step, setStep] = useState(0)
   const [form, setForm] = useState<UploadForm>({
@@ -59,7 +60,7 @@ function UploadPage() {
     try {
       const [titlesRes, hashRes] = await Promise.all([
         axios.post('/api/ai/titles', { topic: form.title, platform: activePlt.name, style: 'viral', keywords: [] }),
-        axios.post('/api/ai/hashtags', { topic: form.title, platform: activePlt.name, count: 20 }),
+        axios.post('/api/ai/hashtags', { topic: form.title, platform: activePlt.name, count: 10 }),
       ])
       setAiTitles(titlesRes.data.titles?.slice(0, 5) || [])
       const tags = hashRes.data.hashtags?.map((h: any) => h.tag).join(' ') || ''
@@ -108,28 +109,34 @@ function UploadPage() {
   }
 
   const canNext = () => {
-    if (step === 0) return !!form.platform
+    if (step === 0) return !!form.platform && isConnected(form.platform as any)
     if (step === 1) return form.title.length >= 5
     return true
   }
 
   const SeoCheck = ({ score, label }: { score: number; label: string }) => (
     <div className="flex items-center gap-3">
-      <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${score >= 70 ? 'bg-green/20 text-green' : score >= 50 ? 'bg-gold/20 text-gold' : 'bg-red/20 text-red'}`}>
+      <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
+        score >= 70 ? 'bg-green/20 text-green' : score >= 50 ? 'bg-gold/20 text-gold' : 'bg-red/20 text-red'
+      }`}>
         {score >= 70 ? <FiCheck size={10} /> : <FiAlertCircle size={10} />}
       </div>
       <div className="flex-1 text-sm text-white/80">{label}</div>
-      <div className="text-sm font-bold" style={{ color: score >= 70 ? '#00ff88' : score >= 50 ? '#ffc740' : '#ff3366' }}>
-        {score}%
-      </div>
+      <div className="text-sm font-bold" style={{
+        color: score >= 70 ? '#00ff88' : score >= 50 ? '#ffc740' : '#ff3366'
+      }}>{score}%</div>
     </div>
   )
+
+  // Count connected platforms
+  const connectedPlatforms = PLATFORMS.filter(p => isConnected(p.code as any))
 
   return (
     <DashboardLayout title="Smart Upload">
       <div className="p-6 max-w-3xl mx-auto">
         <div className="flex items-center gap-3 mb-8">
-          <div className="w-10 h-10 rounded-xl bg-cyan/10 border border-cyan/20 flex items-center justify-center text-cyan">
+          <div className="w-10 h-10 rounded-xl bg-cyan/10 border border-cyan/20
+                        flex items-center justify-center text-cyan">
             <FiUpload size={18} />
           </div>
           <div>
@@ -144,38 +151,96 @@ function UploadPage() {
             <React.Fragment key={s}>
               <div className="flex flex-col items-center">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                  i < step ? 'bg-green text-black' : i === step ? 'bg-cyan text-black' : 'bg-surf2 text-muted'}`}>
+                  i < step ? 'bg-green text-black' : i === step ? 'bg-cyan text-black' : 'bg-surf2 text-muted'
+                }`}>
                   {i < step ? <FiCheck size={12} /> : i + 1}
                 </div>
                 <div className={`text-[10px] mt-1 font-semibold ${i === step ? 'text-cyan' : 'text-muted'}`}>{s}</div>
               </div>
               {i < STEPS.length - 1 && (
-                <div className="flex-1 h-px mx-2 mb-4" style={{ background: i < step ? '#00ff88' : 'rgba(255,255,255,0.08)' }} />
+                <div className="flex-1 h-px mx-2 mb-4"
+                  style={{ background: i < step ? '#00ff88' : 'rgba(255,255,255,0.08)' }} />
               )}
             </React.Fragment>
           ))}
         </div>
 
         <AnimatePresence mode="wait">
-          <motion.div key={step} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }} className="card min-h-80">
+          <motion.div key={step}
+            initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }}
+            className="card min-h-80">
 
             {/* STEP 0: Platform */}
             {step === 0 && (
               <div>
                 <h2 className="font-bold text-white text-lg mb-2">Choose Platform</h2>
-                <p className="text-muted text-sm mb-6">Which platform are you uploading to?</p>
+                <p className="text-muted text-sm mb-6">
+                  Only connected platforms can be selected.
+                  {connectedPlatforms.length === 0 && (
+                    <Link href="/settings">
+                      <span className="text-cyan ml-1 hover:underline cursor-pointer">
+                        Connect a platform →
+                      </span>
+                    </Link>
+                  )}
+                </p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {PLATFORMS.map(p => (
-                    <button key={p.code} onClick={() => setForm(f => ({ ...f, platform: p.code }))}
-                      className={`p-4 rounded-xl border-2 text-center transition-all
-                                 ${form.platform === p.code ? 'border-white/30 bg-white/10' : 'border-white/5 hover:border-white/20'}`}
-                      style={{ borderColor: form.platform === p.code ? p.color + '80' : undefined }}>
-                      <div className="text-2xl mb-2" style={{ color: p.color }}>{p.icon}</div>
-                      <div className="text-xs font-semibold text-white">{p.name}</div>
-                    </button>
-                  ))}
+                  {PLATFORMS.map(p => {
+                    const connected = isConnected(p.code as any)
+                    return (
+                      <button key={p.code}
+                        onClick={() => {
+                          if (!connected) {
+                            toast('Connect this platform in Settings first', { icon: '🔒' })
+                            return
+                          }
+                          setForm(f => ({ ...f, platform: p.code }))
+                        }}
+                        disabled={!connected}
+                        className={`relative p-4 rounded-xl border-2 text-center transition-all
+                                   ${!connected
+                                     ? 'border-white/5 opacity-40 cursor-not-allowed'
+                                     : form.platform === p.code
+                                       ? 'border-white/30 bg-white/10 scale-[1.02]'
+                                       : 'border-white/5 hover:border-white/20 cursor-pointer'
+                                   }`}
+                        style={{
+                          borderColor: connected && form.platform === p.code ? p.color + '80' : undefined
+                        }}>
+                        {/* Lock icon for unconnected */}
+                        {!connected && (
+                          <div className="absolute top-2 right-2">
+                            <FiLock size={10} className="text-muted" />
+                          </div>
+                        )}
+                        <div className="text-2xl mb-2" style={{ color: connected ? p.color : undefined }}>
+                          {p.icon}
+                        </div>
+                        <div className="text-xs font-semibold text-white">{p.name}</div>
+                        {connected ? (
+                          <div className="text-[9px] text-green mt-1">● Connected</div>
+                        ) : (
+                          <div className="text-[9px] text-muted mt-1">Not connected</div>
+                        )}
+                      </button>
+                    )
+                  })}
                 </div>
+
+                {connectedPlatforms.length === 0 && (
+                  <div className="mt-5 p-4 bg-gold/5 border border-gold/20 rounded-xl text-center">
+                    <FiLock size={20} className="text-gold mx-auto mb-2" />
+                    <p className="text-sm text-gold/80 mb-3">
+                      No platforms connected yet. Connect at least one to use Smart Upload.
+                    </p>
+                    <Link href="/settings">
+                      <button className="btn btn-ghost btn-sm text-gold border-gold/30">
+                        Go to Settings →
+                      </button>
+                    </Link>
+                  </div>
+                )}
               </div>
             )}
 
@@ -188,7 +253,13 @@ function UploadPage() {
                   <input className="inp" value={form.title}
                     onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
                     placeholder={`Your ${activePlt.name} title...`} />
-                  <p className="text-xs text-muted mt-1">{form.title.length} chars · Optimal: 60–70</p>
+                  <p className={`text-xs mt-1 ${
+                    form.title.length >= 55 && form.title.length <= 70 ? 'text-green' :
+                    form.title.length >= 40 ? 'text-gold' : 'text-muted'
+                  }`}>
+                    {form.title.length} chars
+                    {activePlatform === 'yt' && ' · Optimal: 55–70 for YouTube'}
+                  </p>
                 </div>
                 <div>
                   <label className="label">Description</label>
@@ -222,10 +293,10 @@ function UploadPage() {
                   <h2 className="font-bold text-white text-lg">AI Optimization</h2>
                   <AIBadge />
                 </div>
-                <p className="text-muted text-sm mb-5">Let Gemini AI generate better titles and hashtags for you.</p>
-
-                <button onClick={generateAI} disabled={generating}
-                  className="btn btn-cyan gap-2 mb-6">
+                <p className="text-muted text-sm mb-5">
+                  Generate optimized titles and hashtags for your content.
+                </p>
+                <button onClick={generateAI} disabled={generating} className="btn btn-cyan gap-2 mb-6">
                   {generating ? <Spinner size={15} /> : <FiZap size={15} />}
                   {generating ? 'Generating...' : 'Generate AI Suggestions'}
                 </button>
@@ -238,10 +309,18 @@ function UploadPage() {
                         {aiTitles.map((t: any, i: number) => (
                           <button key={i} onClick={() => setForm(f => ({ ...f, title: t.title }))}
                             className={`w-full text-left p-3 rounded-xl border text-sm transition-all
-                                       ${form.title === t.title ? 'border-cyan/40 bg-cyan/5 text-white' : 'border-white/5 bg-surf2 text-white/70 hover:border-white/20'}`}>
+                                       ${form.title === t.title
+                                         ? 'border-cyan/40 bg-cyan/5 text-white'
+                                         : 'border-white/5 bg-surf2 text-white/70 hover:border-white/20'
+                                       }`}>
                             <div className="flex justify-between items-start gap-2">
                               <span>{t.title}</span>
-                              <span className="text-xs font-bold text-cyan flex-shrink-0">Score: {t.score}</span>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <span className={`text-[10px] font-semibold ${
+                                  t.title?.length >= 55 && t.title?.length <= 70 ? 'text-green' : 'text-gold'
+                                }`}>{t.title?.length}ch</span>
+                                <span className="text-xs font-bold text-cyan">Score: {t.score}</span>
+                              </div>
                             </div>
                           </button>
                         ))}
@@ -250,8 +329,9 @@ function UploadPage() {
 
                     {form.hashtags && (
                       <div>
-                        <label className="label">AI Hashtags</label>
-                        <div className="p-3 bg-surf2 rounded-xl text-sm text-white/70 leading-relaxed border border-white/5">
+                        <label className="label">AI Hashtags (10 generated)</label>
+                        <div className="p-3 bg-surf2 rounded-xl text-sm text-white/70
+                                      leading-relaxed border border-white/5">
                           {form.hashtags}
                         </div>
                       </div>
@@ -268,7 +348,6 @@ function UploadPage() {
                   <h2 className="font-bold text-white text-lg">🔬 SEO Scan</h2>
                   <AIBadge />
                 </div>
-
                 <button onClick={runSeoScan} disabled={scanning} className="btn btn-cyan gap-2 mb-6">
                   {scanning ? <Spinner size={15} /> : '🔬'}
                   {scanning ? 'Scanning...' : 'Run SEO Scan'}
@@ -277,7 +356,7 @@ function UploadPage() {
                 {scanning && (
                   <div className="text-center py-8">
                     <div className="loading-dots flex justify-center mb-3"><span /><span /><span /></div>
-                    <p className="text-muted text-sm">Gemini AI is analyzing your content...</p>
+                    <p className="text-muted text-sm">Analyzing your content...</p>
                   </div>
                 )}
 
@@ -294,7 +373,7 @@ function UploadPage() {
                     </div>
                     {seo.suggestions?.length > 0 && (
                       <div className="bg-surf2 rounded-xl p-4">
-                        <p className="text-xs font-bold uppercase tracking-wider text-muted mb-3">AI Suggestions</p>
+                        <p className="text-xs font-bold uppercase tracking-wider text-muted mb-3">Suggestions</p>
                         <ul className="space-y-2">
                           {seo.suggestions.map((s, i) => (
                             <li key={i} className="flex items-start gap-2 text-sm text-white/70">
@@ -331,14 +410,16 @@ function UploadPage() {
                     { l: 'SEO Score', v: seo ? `${seo.score}/100` : 'Not scanned' },
                   ].map(row => (
                     <div key={row.l} className="flex items-start gap-3 py-2 border-b border-white/5">
-                      <div className="text-xs font-bold uppercase tracking-wider text-muted w-24 flex-shrink-0 mt-0.5">{row.l}</div>
+                      <div className="text-xs font-bold uppercase tracking-wider text-muted w-24 flex-shrink-0 mt-0.5">
+                        {row.l}
+                      </div>
                       <div className="text-sm text-white/80">{row.v || '—'}</div>
                     </div>
                   ))}
                 </div>
                 <div className="bg-surf2 rounded-xl p-4 text-sm text-muted mb-5">
-                  ℹ️ Direct publishing requires your {activePlt.name} account to be connected in Settings.
-                  Your content will be saved to your library for easy access.
+                  ℹ️ Your content will be saved to your library.
+                  Connect {activePlt.name} in Settings to publish directly.
                 </div>
                 <button onClick={handlePublish} disabled={uploading} className="btn btn-cyan gap-2">
                   {uploading ? <Spinner size={15} /> : <FiCheck size={15} />}
@@ -358,7 +439,9 @@ function UploadPage() {
           </button>
           {step < STEPS.length - 1 && (
             <button onClick={() => setStep(s => s + 1)} disabled={!canNext()}
-              className="btn btn-cyan gap-2 disabled:opacity-50">
+              className="btn btn-cyan gap-2 disabled:opacity-50"
+              title={step === 0 && !isConnected(form.platform as any)
+                ? 'Select a connected platform first' : ''}>
               Next <FiArrowRight size={15} />
             </button>
           )}
