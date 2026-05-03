@@ -40,7 +40,8 @@ async function callGemini(prompt: string, systemPrompt?: string): Promise<string
   }
 
   const data: GeminiResponse = await res.json()
-  return data.candidates[0]?.content?.parts[0]?.text || ''
+  const raw = data.candidates[0]?.content?.parts[0]?.text || ''
+return raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
 }
 
 // ── SEO Analysis ──────────────────────────────────────
@@ -359,3 +360,4 @@ Return JSON only:
 }
 
 export default callGemini
+// cache bust Sun May  3 17:34:15 WAT 2026
