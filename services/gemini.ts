@@ -29,7 +29,7 @@ async function callGemini(prompt: string, systemPrompt?: string): Promise<string
       generationConfig: {
         temperature: 0.8,
         topP: 0.95,
-        maxOutputTokens: 2048,
+        maxOutputTokens: 8192,
       },
     }),
   })
