@@ -239,7 +239,9 @@ Return JSON only:
 `
   const text = await callGemini(prompt)
   try {
-    return JSON.parse(text.replace(/```json|```/g, '').trim())
+    const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
+    return jsonMatch ? JSON.parse(jsonMatch[0]) : { trends: [], summary: '' }
   } catch {
     return { trends: [], summary: '' }
   }
