@@ -9,7 +9,7 @@ import axios from 'axios'
 import toast from 'react-hot-toast'
 import { FiCopy, FiRefreshCw, FiZap, FiType, FiHash, FiAlignLeft, FiCheckCircle } from 'react-icons/fi'
 
-type Tool = 'titles' | 'description' | 'hashtags' | 'seo' | 'ideas'
+type Tool = 'titles' | 'description' | 'hashtags' | 'ideas'
 
 function AIToolsPage() {
   const { activePlatform } = usePlatform()
@@ -22,9 +22,6 @@ function AIToolsPage() {
   const [tone, setTone] = useState('engaging')
 
   // SEO inputs
-  const [seoTitle, setSeoTitle] = useState('')
-  const [seoDesc, setSeoDesc] = useState('')
-  const [seoTags, setSeoTags] = useState('')
 
   // Results
   const [results, setResults] = useState<any>(null)
@@ -36,8 +33,7 @@ function AIToolsPage() {
   }
 
   const runTool = async () => {
-    if (!topic && tool !== 'seo') { toast.error('Please enter a topic'); return }
-    if (tool === 'seo' && !seoTitle) { toast.error('Please enter a title for SEO analysis'); return }
+    if (!topic) { toast.error('Please enter a topic'); return }
     setLoading(true)
     setResults(null)
     try {
