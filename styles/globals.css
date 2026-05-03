@@ -1,0 +1,223 @@
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg: #030309;
+    --surf: #0e0e24;
+    --surf2: #141432;
+    --cyan: #00f5ff;
+    --magenta: #ff0090;
+    --green: #00ff88;
+    --gold: #ffc740;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    @apply bg-bg text-white font-sans;
+    font-size: 15px;
+    overflow-x: hidden;
+  }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-surf3 rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-muted; }
+
+  ::selection { background: rgba(0,245,255,0.2); color: #fff; }
+}
+
+@layer components {
+  /* ── BUTTONS ── */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-3 rounded-lg
+           font-bold text-sm transition-all duration-200 cursor-pointer
+           disabled:opacity-50 disabled:cursor-not-allowed select-none;
+  }
+  .btn-cyan {
+    @apply bg-gradient-to-r from-cyan to-blue-400 text-black shadow-cyan
+           hover:shadow-cyan-lg hover:-translate-y-0.5;
+  }
+  .btn-magenta {
+    @apply bg-gradient-to-r from-magenta to-purple-500 text-white shadow-magenta
+           hover:-translate-y-0.5;
+  }
+  .btn-green {
+    @apply bg-gradient-to-r from-green to-emerald-400 text-black shadow-green
+           hover:-translate-y-0.5;
+  }
+  .btn-ghost {
+    @apply bg-white/5 border border-white/10 text-white
+           hover:bg-white/10 hover:border-white/20;
+  }
+  .btn-sm { @apply px-3 py-2 text-xs; }
+  .btn-lg { @apply px-7 py-4 text-base; }
+
+  /* ── CARDS ── */
+  .card {
+    @apply bg-surf border border-white/5 rounded-xl2 p-5 shadow-card;
+  }
+  .card-hover {
+    @apply card transition-all duration-200 hover:border-white/10 hover:shadow-lg;
+  }
+  .glass {
+    @apply bg-white/5 backdrop-blur-md border border-white/10 rounded-xl2;
+  }
+
+  /* ── INPUTS ── */
+  .inp {
+    @apply w-full px-4 py-3 bg-surf2 border border-white/10 rounded-lg
+           text-white text-sm placeholder:text-muted
+           focus:outline-none focus:border-cyan/60 focus:ring-1 focus:ring-cyan/20
+           transition-all duration-200;
+  }
+  .label {
+    @apply block text-xs font-bold uppercase tracking-widest text-muted mb-2;
+  }
+
+  /* ── BADGES ── */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full
+           text-xs font-bold uppercase tracking-wide;
+  }
+  .badge-cyan { @apply badge bg-cyan/10 text-cyan border border-cyan/20; }
+  .badge-green { @apply badge bg-green/10 text-green border border-green/20; }
+  .badge-red { @apply badge bg-red/10 text-red border border-red/20; }
+  .badge-gold { @apply badge bg-gold/10 text-gold border border-gold/20; }
+  .badge-magenta { @apply badge bg-magenta/10 text-magenta border border-magenta/20; }
+
+  /* ── STAT BOX ── */
+  .stat-box {
+    @apply card flex flex-col gap-1 relative overflow-hidden;
+    border-bottom: 2px solid var(--sc, #00f5ff);
+  }
+  .stat-box::before {
+    content: '';
+    @apply absolute inset-0 opacity-5;
+    background: radial-gradient(circle at top left, var(--sc, #00f5ff), transparent 60%);
+  }
+
+  /* ── NEON TEXT ── */
+  .neon-cyan { text-shadow: 0 0 20px rgba(0,245,255,0.5); }
+  .neon-magenta { text-shadow: 0 0 20px rgba(255,0,144,0.5); }
+  .neon-green { text-shadow: 0 0 20px rgba(0,255,136,0.5); }
+
+  /* ── GRADIENT TEXT ── */
+  .grad-text {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #00f5ff, #ff0090);
+  }
+  .grad-text-green {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #00ff88, #00f5ff);
+  }
+
+  /* ── PROGRESS BAR ── */
+  .progress { @apply w-full bg-surf2 rounded-full overflow-hidden h-1.5; }
+  .progress-fill { @apply h-full rounded-full transition-all duration-500; }
+
+  /* ── SIDEBAR NAV ITEM ── */
+  .nav-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
+           text-muted cursor-pointer transition-all duration-150
+           hover:text-white hover:bg-white/5;
+  }
+  .nav-item.active {
+    @apply text-white bg-white/10 border-l-2 border-cyan;
+    margin-left: -2px;
+    padding-left: 14px;
+  }
+
+  /* ── PLATFORM CHIP ── */
+  .plt-chip {
+    @apply flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surf2
+           border border-white/10 text-sm font-semibold cursor-pointer
+           transition-all duration-150 hover:border-white/20;
+  }
+  .plt-chip.active { @apply border-cyan/40 bg-cyan/5; }
+
+  /* ── TABLE ── */
+  .data-table { @apply w-full border-collapse; }
+  .data-table th {
+    @apply text-left text-xs font-bold uppercase tracking-widest text-muted
+           pb-3 border-b border-white/5;
+  }
+  .data-table td {
+    @apply py-3 text-sm border-b border-white/5 text-white/80;
+  }
+  .data-table tr:hover td { @apply bg-white/5; }
+
+  /* ── GLOWING ORB ── */
+  .orb {
+    @apply absolute rounded-full pointer-events-none;
+    filter: blur(60px);
+  }
+
+  /* ── LOADING DOTS ── */
+  .loading-dots span {
+    @apply inline-block w-1.5 h-1.5 rounded-full bg-cyan mx-0.5;
+    animation: bounce 0.8s ease-in-out infinite;
+  }
+  .loading-dots span:nth-child(2) { animation-delay: 0.15s; }
+  .loading-dots span:nth-child(3) { animation-delay: 0.3s; }
+
+  @keyframes bounce {
+    0%, 80%, 100% { transform: translateY(0); }
+    40% { transform: translateY(-6px); }
+  }
+
+  /* ── GRID BACKGROUND ── */
+  .grid-bg {
+    background-image: linear-gradient(rgba(0,245,255,0.03) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(0,245,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  /* ── SCAN LINE ANIMATION ── */
+  .scan-line {
+    @apply absolute left-0 right-0 h-0.5 pointer-events-none;
+    background: linear-gradient(90deg, transparent, #00f5ff, transparent);
+    animation: scan 2s linear infinite;
+    box-shadow: 0 0 10px #00f5ff;
+  }
+
+  /* ── RANK BAR ── */
+  .rank-bar { @apply flex items-center gap-2; }
+  .rank-track { @apply flex-1 bg-surf3 rounded-full h-1.5 overflow-hidden; }
+  .rank-fill { @apply h-full rounded-full; }
+  .rank-high .rank-fill { background: #00ff88; }
+  .rank-med .rank-fill { background: #ffc740; }
+  .rank-low .rank-fill { background: #ff3366; }
+}
+
+/* ── RECHARTS CUSTOM ── */
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: rgba(255,255,255,0.04) !important;
+}
+.recharts-text { fill: #6060a0 !important; font-family: 'Outfit', sans-serif !important; font-size: 11px !important; }
+.recharts-tooltip-wrapper { z-index: 100; }
+
+/* ── CUSTOM TOOLTIP ── */
+.custom-tooltip {
+  @apply bg-surf border border-white/10 rounded-lg p-3 shadow-modal text-sm;
+}
+
+/* ── ANIMATIONS ── */
+@keyframes shimmer {
+  0% { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #141432 25%, #1c1c44 50%, #141432 75%);
+  background-size: 1000px 100%;
+  animation: shimmer 2s infinite;
+  @apply rounded-lg;
+}
+
+/* ── FRAMER MOTION DEFAULTS ── */
+.page-enter { opacity: 0; transform: translateY(12px); }
+.page-enter-active { opacity: 1; transform: translateY(0); transition: all 0.35s ease; }
