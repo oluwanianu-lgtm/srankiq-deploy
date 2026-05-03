@@ -241,9 +241,10 @@ Return JSON only:
   try {
     const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
     const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
-    return jsonMatch ? JSON.parse(jsonMatch[0]) : { trends: [], summary: '' }
-  } catch {
-    return { trends: [], summary: '' }
+    if (!jsonMatch) return { trends: [], summary: 'parse error' }
+    return JSON.parse(jsonMatch[0])
+  } catch (e) {
+    return { trends: [], summary: String(e) }
   }
 }
 
