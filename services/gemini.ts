@@ -261,10 +261,13 @@ Return JSON only:
 `
   const text = await callGemini(prompt)
   try {
-    return JSON.parse(text.replace(/```json|```/g, '').trim())
-  } catch {
-    return null
-  }
+  const start = text.indexOf('{')
+const end = text.lastIndexOf('}')
+if (start === -1 || end === -1) return null
+return JSON.parse(text.substring(start, end + 1))
+} catch {
+  return null
+}
 }
 
 // ── Content Ideas Generator ───────────────────────────
