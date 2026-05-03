@@ -19,6 +19,7 @@ export default function App({ Component, pageProps }: AppProps) {
         <meta name="theme-color" content="#030309" />
         <link rel="icon" href="/favicon.ico" />
         <title>SRankIQ — Social Media Ranking Intelligence</title>
+        <script src="https://accounts.google.com/gsi/client" async defer></script>
       </Head>
 
       <AuthProvider>
