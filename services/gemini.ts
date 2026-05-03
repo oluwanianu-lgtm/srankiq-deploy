@@ -2,8 +2,8 @@
 // Server-side only — never import this on the client
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY!
-const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
-const MODEL = 'gemini-1.5-flash-latest'
+const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1/models'
+const MODEL = 'gemini-1.5-flash'
 
 interface GeminiResponse {
   candidates: Array<{
