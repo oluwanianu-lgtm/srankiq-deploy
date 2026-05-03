@@ -51,7 +51,7 @@ function AIToolsPage() {
           res = await axios.post('/api/ai/description', { title: topic, platform: activePlt.name, keywords: kwArr, tone })
           break
         case 'hashtags':
-          res = await axios.post('/api/ai/hashtags', { topic, platform: activePlt.name, count: 25 })
+          res = await axios.post('/api/ai/hashtags', { topic, platform: activePlt.name, count: 10 })
           break
         case 'seo':
           res = await axios.post('/api/ai/seo', {
@@ -75,7 +75,7 @@ function AIToolsPage() {
     { label: '📝 Titles', value: 'titles' },
     { label: '📄 Description', value: 'description' },
     { label: '#️⃣ Hashtags', value: 'hashtags' },
-    { label: '🔬 SEO Scan', value: 'seo' },
+    
     { label: '💡 Content Ideas', value: 'ideas' },
   ]
 

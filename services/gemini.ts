@@ -27,7 +27,7 @@ async function callGemini(prompt: string, systemPrompt?: string): Promise<string
     body: JSON.stringify({
       contents: messages,
       generationConfig: {
-        temperature: 0.8,
+        temperature: 0.7,
         topP: 0.95,
         maxOutputTokens: 2048,
       },
@@ -73,7 +73,7 @@ Return a JSON object (no markdown) with:
 `
   const text = await callGemini(prompt)
   try {
-    return JSON.parse(text.replace(/```json|```/g, '').trim())
+    const _s = text.indexOf('{'), _e = text.lastIndexOf('}'); return _s > -1 && _e > -1 ? JSON.parse(text.substring(_s, _e + 1)) : null
   } catch {
     return { score: 70, suggestions: ['Could not parse analysis'], keywords: [] }
   }
@@ -87,7 +87,7 @@ export async function generateTitles(data: {
   keywords: string[]
 }) {
   const prompt = `
-Generate 8 highly optimized ${data.platform} video/post titles for the topic: "${data.topic}"
+Generate 5 highly optimized ${data.platform} video/post titles for the topic: "${data.topic}"
 Style: ${data.style}
 Target keywords: ${data.keywords.join(', ')}
 
@@ -107,7 +107,7 @@ Return JSON only (no markdown):
 `
   const text = await callGemini(prompt)
   try {
-    return JSON.parse(text.replace(/```json|```/g, '').trim())
+    const _s = text.indexOf('{'), _e = text.lastIndexOf('}'); return _s > -1 && _e > -1 ? JSON.parse(text.substring(_s, _e + 1)) : null
   } catch {
     return { titles: [{ title: data.topic, type: 'general', score: 70 }] }
   }
@@ -163,7 +163,7 @@ Return JSON only:
 `
   const text = await callGemini(prompt)
   try {
-    return JSON.parse(text.replace(/```json|```/g, '').trim())
+    const _s = text.indexOf('{'), _e = text.lastIndexOf('}'); return _s > -1 && _e > -1 ? JSON.parse(text.substring(_s, _e + 1)) : null
   } catch {
     return { hashtags: [] }
   }
@@ -202,7 +202,7 @@ Return JSON only:
 `
   const text = await callGemini(prompt)
   try {
-    return JSON.parse(text.replace(/```json|```/g, '').trim())
+    const _s = text.indexOf('{'), _e = text.lastIndexOf('}'); return _s > -1 && _e > -1 ? JSON.parse(text.substring(_s, _e + 1)) : null
   } catch {
     return { analysis: [] }
   }
@@ -300,7 +300,7 @@ Return JSON only:
 `
   const text = await callGemini(prompt)
   try {
-    return JSON.parse(text.replace(/```json|```/g, '').trim())
+    const _s = text.indexOf('{'), _e = text.lastIndexOf('}'); return _s > -1 && _e > -1 ? JSON.parse(text.substring(_s, _e + 1)) : null
   } catch {
     return { ideas: [] }
   }
@@ -332,7 +332,7 @@ Return JSON only:
 `
   const text = await callGemini(prompt)
   try {
-    return JSON.parse(text.replace(/```json|```/g, '').trim())
+    const _s = text.indexOf('{'), _e = text.lastIndexOf('}'); return _s > -1 && _e > -1 ? JSON.parse(text.substring(_s, _e + 1)) : null
   } catch {
     return { insights: [] }
   }
