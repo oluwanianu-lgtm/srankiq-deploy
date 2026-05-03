@@ -210,40 +210,18 @@ Return JSON only:
 
 // ── Trend Analysis ────────────────────────────────────
 export async function analyzeTrends(platform: string) {
-  const prompt = `
-What are the TOP 10 trending topics, keywords, and content ideas on ${platform} RIGHT NOW in 2026?
+  const prompt = `List 5 trending topics on ${platform} in 2026. Return ONLY valid JSON, no markdown, no backticks:
+{"trends":[{"topic":"AI Content Creation","category":"Technology","viralityScore":95,"growth":"+200% this week","contentIdea":"How AI is changing content creation","format":"Short video"}],"summary":"Top trends"}`
 
-For each trend include:
-- Trend name/topic
-- Category (Entertainment, Education, Finance, Health, etc.)
-- Virality score (0-100)
-- Growth rate (e.g. "+450% this week")
-- Content idea based on the trend
-- Best content format for this trend
-
-Return JSON only:
-{
-  "trends": [
-    {
-      "topic": "...",
-      "category": "...",
-      "viralityScore": 89,
-      "growth": "+450% this week",
-      "contentIdea": "...",
-      "format": "Short video|Long video|Reel|Post|Story"
-    },
-    ...
-  ],
-  "summary": "Brief overview of what's trending"
-}
-`
-  const text = await callGemini(prompt)
   try {
-    const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-    const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
-    return jsonMatch ? JSON.parse(jsonMatch[0]) : { trends: [], summary: '' }
-  } catch {
-    return { trends: [], summary: '' }
+    const raw = await callGemini(prompt)
+    const start = raw.indexOf('{')
+    const end = raw.lastIndexOf('}')
+    if (start === -1 || end === -1) return { trends: [], summary: 'no json found' }
+    const jsonStr = raw.substring(start, end + 1)
+    return JSON.parse(jsonStr)
+  } catch (e) {
+    return { trends: [], summary: String(e) }
   }
 }
 
