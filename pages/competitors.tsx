@@ -1,4 +1,4 @@
-// pages/2-competitors.tsx  (replace competitors.tsx)
+// pages/3-competitors.tsx  (replace competitors.tsx)
 import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import DashboardLayout from '../components/layout/DashboardLayout'
@@ -12,9 +12,9 @@ import { saveCompetitor, getCompetitors, deleteCompetitor } from '../services/fi
 import { useRouter } from 'next/router'
 import {
   FiPlus, FiTrash2, FiRefreshCw, FiSearch, FiYoutube,
-  FiUsers, FiEye, FiThumbsUp, FiMessageSquare, FiTrendingUp,
+  FiUsers, FiThumbsUp, FiMessageSquare,
   FiDollarSign, FiExternalLink, FiBarChart2, FiChevronDown, FiChevronUp,
-  FiCalendar, FiCopy, FiCheck, FiZap
+  FiCalendar, FiCheck, FiZap
 } from 'react-icons/fi'
 
 function formatNum(n: number): string {
@@ -46,7 +46,8 @@ function SEOBadge({ score }: { score: number }) {
   )
 }
 
-// ── Laser Scanner Animation ──────────────────────────────────────
+// ── Vertical Laser Scanner ────────────────────────────────────────
+// Scans from top to bottom of the channel panel, repeating each phase
 const CLONE_PHASES = [
   'Analyzing content strategy...',
   'Extracting ranking keywords...',
@@ -56,82 +57,104 @@ const CLONE_PHASES = [
   'Finalizing clone package...',
 ]
 
-function LaserScanner({ phase, total }: { phase: number; total: number }) {
+function VerticalLaserScanner({ phase, containerHeight }: { phase: number; containerHeight: number }) {
   return (
-    <div className="relative overflow-hidden rounded-xl bg-surf2 border border-cyan/20 p-6">
-      {/* Laser line */}
+    <>
+      {/* Vertical laser line sweeping top → bottom */}
       <motion.div
-        key={phase}
-        className="absolute left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-cyan to-transparent"
-        style={{ top: '50%' }}
-        initial={{ x: '-100%', opacity: 0 }}
-        animate={{ x: '100%', opacity: [0, 1, 1, 0] }}
-        transition={{ duration: 1.2, ease: 'easeInOut' }}
-      />
-      {/* Glow effect */}
+        key={`laser-${phase}`}
+        className="absolute left-0 right-0 z-20 pointer-events-none"
+        style={{ height: '3px' }}
+        initial={{ top: 0, opacity: 0 }}
+        animate={{ top: containerHeight || 400, opacity: [0, 1, 1, 1, 0] }}
+        transition={{ duration: 1.4, ease: 'easeInOut' }}
+      >
+        {/* The laser beam */}
+        <div className="w-full h-full bg-gradient-to-r from-transparent via-cyan to-transparent" />
+        {/* Glow below the line */}
+        <div className="w-full h-8 bg-gradient-to-b from-cyan/20 to-transparent -mt-0 pointer-events-none" />
+      </motion.div>
+
+      {/* Scanning overlay that follows */}
       <motion.div
-        key={`glow-${phase}`}
-        className="absolute left-0 right-0 h-8 bg-gradient-to-r from-transparent via-cyan/10 to-transparent"
-        style={{ top: 'calc(50% - 16px)' }}
-        initial={{ x: '-100%' }}
-        animate={{ x: '100%' }}
-        transition={{ duration: 1.2, ease: 'easeInOut' }}
-      />
-      <div className="relative z-10 text-center">
-        <div className="flex items-center justify-center gap-3 mb-3">
-          <div className="w-8 h-8 rounded-full bg-cyan/20 border border-cyan/40 flex items-center justify-center">
-            <FiZap size={14} className="text-cyan" />
-          </div>
-          <span className="text-sm font-bold text-cyan">Cloning Channel</span>
+        key={`overlay-${phase}`}
+        className="absolute left-0 right-0 z-10 pointer-events-none"
+        style={{ height: '60px' }}
+        initial={{ top: -60, opacity: 0 }}
+        animate={{ top: containerHeight || 400, opacity: [0, 0.3, 0.3, 0] }}
+        transition={{ duration: 1.4, ease: 'easeInOut' }}
+      >
+        <div className="w-full h-full bg-gradient-to-b from-cyan/10 to-transparent" />
+      </motion.div>
+    </>
+  )
+}
+
+function CloneOverlay({ phase, isCloning, containerRef }: {
+  phase: number; isCloning: boolean; containerRef: React.RefObject<HTMLDivElement>
+}) {
+  const [height, setHeight] = useState(400)
+
+  useEffect(() => {
+    if (containerRef.current) {
+      setHeight(containerRef.current.offsetHeight)
+    }
+  }, [containerRef, isCloning])
+
+  if (!isCloning) return null
+
+  return (
+    <div className="absolute inset-0 z-10 rounded-xl overflow-hidden pointer-events-none"
+      style={{ border: '1px solid rgba(0,245,255,0.3)' }}>
+      {/* Dark tint */}
+      <div className="absolute inset-0 bg-black/40" />
+      {/* Vertical scanner */}
+      <VerticalLaserScanner phase={phase} containerHeight={height} />
+      {/* Phase label */}
+      <div className="absolute bottom-4 left-0 right-0 flex flex-col items-center gap-2 z-30">
+        <div className="bg-black/80 backdrop-blur-sm rounded-full px-4 py-2 flex items-center gap-2">
+          <FiZap size={12} className="text-cyan animate-pulse" />
+          <span className="text-xs font-bold text-cyan">{CLONE_PHASES[phase] || 'Processing...'}</span>
         </div>
-        <p className="text-sm text-white/80 mb-4">{CLONE_PHASES[phase] || 'Processing...'}</p>
-        {/* Progress dots */}
-        <div className="flex justify-center gap-2 mb-3">
+        {/* Dots */}
+        <div className="flex gap-1.5">
           {CLONE_PHASES.map((_, i) => (
-            <div key={i} className={`w-2 h-2 rounded-full transition-all duration-300 ${
+            <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
               i < phase ? 'bg-cyan' : i === phase ? 'bg-cyan animate-pulse' : 'bg-white/20'
             }`} />
           ))}
-        </div>
-        <div className="text-xs text-muted">{phase + 1} of {total} phases</div>
-        {/* Progress bar */}
-        <div className="mt-3 h-1 bg-white/10 rounded-full overflow-hidden">
-          <motion.div className="h-full bg-gradient-to-r from-cyan to-green rounded-full"
-            animate={{ width: `${((phase + 1) / total) * 100}%` }}
-            transition={{ duration: 0.5 }} />
         </div>
       </div>
     </div>
   )
 }
 
-// ── Clone Success Modal ──────────────────────────────────────────
-function CloneSuccessModal({ blueprint, channelName, onCheck, onClose }:
-  { blueprint: any; channelName: string; onCheck: () => void; onClose: () => void }) {
+// ── Clone Success Modal ───────────────────────────────────────────
+function CloneSuccessModal({ channelName, onCheck, onClose }: {
+  channelName: string; onCheck: () => void; onClose: () => void
+}) {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
       <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.8, opacity: 0 }}
         className="bg-surf border border-white/10 rounded-2xl p-8 max-w-md w-full text-center shadow-2xl">
-        {/* Success checkmark */}
         <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}
           transition={{ type: 'spring', delay: 0.2 }}
-          className="w-20 h-20 rounded-full bg-green/20 border-4 border-green flex items-center
-                    justify-center mx-auto mb-5">
+          className="w-20 h-20 rounded-full bg-green/20 border-4 border-green flex items-center justify-center mx-auto mb-5">
           <FiCheck size={36} className="text-green" />
         </motion.div>
         <h2 className="text-2xl font-bold text-white mb-2">Channel Cloned! 🎉</h2>
         <p className="text-muted text-sm mb-2">
-          Your blueprint for <span className="text-cyan font-semibold">{channelName}</span> is ready.
+          Blueprint for <span className="text-cyan font-semibold">{channelName}</span> is ready.
         </p>
         <div className="text-xs text-muted mb-6 p-3 bg-surf2 rounded-xl border border-white/5">
-          <div className="text-white font-semibold mb-1">📋 Blueprint includes:</div>
+          <div className="text-white font-semibold mb-1">Blueprint includes:</div>
           Channel name · Tags · Content pillars · Video formats · Upload schedule · Title formulas · Growth tips
         </div>
         <button onClick={onCheck}
           className="btn btn-cyan w-full justify-center gap-2 mb-3 text-base py-3">
-          <FiCheck size={16} /> View in Get Inspiration →
+          <FiCheck size={16} /> View Full Blueprint in Get Inspiration →
         </button>
         <button onClick={onClose} className="text-xs text-muted hover:text-white transition-colors">
           Stay here
@@ -141,7 +164,7 @@ function CloneSuccessModal({ blueprint, channelName, onCheck, onClose }:
   )
 }
 
-// ── Video Card ───────────────────────────────────────────────────
+// ── Video Card ────────────────────────────────────────────────────
 function VideoCard({ video, index }: { video: any; index: number }) {
   const [expanded, setExpanded] = useState(false)
   return (
@@ -247,13 +270,12 @@ function filterByDate(videos: any[], range: string): any[] {
   return filtered.length > 0 ? filtered : videos
 }
 
-// ── Main Page ────────────────────────────────────────────────────
+// ── Main Page ─────────────────────────────────────────────────────
 function CompetitorsPage() {
   const { activePlatform } = usePlatform()
   const { user } = useAuth()
   const router = useRouter()
   const activePlt = PLATFORMS.find(p => p.code === activePlatform)!
-  const resultsRef = useRef<HTMLDivElement>(null)
 
   const [savedCompetitors, setSavedCompetitors] = useState<any[]>([])
   const [newName, setNewName] = useState('')
@@ -263,7 +285,6 @@ function CompetitorsPage() {
   const [analyzing, setAnalyzing] = useState('')
   const [dateRange, setDateRange] = useState('all')
 
-  // Similar channels
   const [suggestions, setSuggestions] = useState<any[]>([])
   const [loadingSuggestions, setLoadingSuggestions] = useState(false)
 
@@ -273,10 +294,13 @@ function CompetitorsPage() {
   const [cloneBlueprint, setCloneBlueprint] = useState<any>(null)
   const [showCloneSuccess, setShowCloneSuccess] = useState(false)
 
-  // Read channel from query param (from keywords page redirect)
+  // Ref for the channel panel — laser scans over this
+  const channelPanelRef = useRef<HTMLDivElement>(null)
+  const resultsRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     const ch = router.query.channel as string
-    if (ch) { analyze(ch) }
+    if (ch) analyze(ch)
   }, [router.query.channel])
 
   useEffect(() => { if (user) loadSaved() }, [user])
@@ -295,9 +319,7 @@ function CompetitorsPage() {
     setCloneBlueprint(null)
     try {
       const res = await axios.post('/api/competitors/analyze', {
-        channelName: name,
-        platform: activePlt.name,
-        niche: niche || 'general',
+        channelName: name, platform: activePlt.name, niche: niche || 'general',
       })
       setAnalysis(res.data)
       if (save && user) {
@@ -320,10 +342,8 @@ function CompetitorsPage() {
     try {
       const keywords = data.rankingKeywords?.slice(0, 4).join(' ') || data.name
       const res = await axios.post('/api/competitors/2-suggestions', {
-        channelName: data.name,
-        keywords,
-        niche: niche || 'general',
-        excludeId: data.channelId,
+        channelName: data.name, keywords,
+        niche: niche || 'general', excludeId: data.channelId,
       })
       setSuggestions(res.data.suggestions || [])
     } catch { setSuggestions([]) } finally { setLoadingSuggestions(false) }
@@ -335,39 +355,40 @@ function CompetitorsPage() {
     setClonePhase(0)
     setCloneBlueprint(null)
 
-    // Animate through phases
-    for (let i = 0; i < CLONE_PHASES.length - 1; i++) {
-      await new Promise(r => setTimeout(r, 900))
-      setClonePhase(i + 1)
+    // Animate through phases with laser scanning the channel panel
+    for (let i = 0; i < CLONE_PHASES.length; i++) {
+      setClonePhase(i)
+      await new Promise(r => setTimeout(r, 1200))
     }
 
     try {
       const res = await axios.post('/api/competitors/3-clone', {
-        channelName: analysis.name,
-        channelData: analysis,
+        channelName: analysis.name, channelData: analysis,
       })
       setCloneBlueprint(res.data.blueprint)
-      await new Promise(r => setTimeout(r, 500))
+      await new Promise(r => setTimeout(r, 400))
       setCloning(false)
       setShowCloneSuccess(true)
-    } catch {
+    } catch (err: any) {
       setCloning(false)
-      toast.error('Clone failed. Try again.')
+      toast.error('Clone failed. Please try again.')
     }
   }
 
   const handleCloneCheck = () => {
     if (!cloneBlueprint) return
     setShowCloneSuccess(false)
+    const bp = cloneBlueprint
     const msg = encodeURIComponent(
-      `I just cloned the channel "${analysis?.name}". Here is my complete channel blueprint:\n\n` +
-      `📌 Channel Name: ${cloneBlueprint.channelName?.primary}\n` +
-      `🎯 Niche: ${cloneBlueprint.niche}\n` +
-      `👥 Target Audience: ${cloneBlueprint.targetAudience}\n` +
-      `📅 Upload Schedule: ${cloneBlueprint.uploadSchedule}\n` +
-      `🏷️ Channel Tags: ${cloneBlueprint.channelTags?.join(', ')}\n` +
-      `🎬 Video Formats: ${cloneBlueprint.videoFormats?.map((f: any) => f.format).join(', ')}\n\n` +
-      `Help me plan my first 30 days of content based on this blueprint.`
+      `I cloned the YouTube channel "${analysis?.name}". Here is my channel blueprint:\n\n` +
+      `Channel Name: ${bp.channelName?.primary || analysis?.name + ' Style'}\n` +
+      `Niche: ${bp.niche || 'Content creation'}\n` +
+      `Target Audience: ${bp.targetAudience || 'YouTube creators'}\n` +
+      `Upload Schedule: ${bp.uploadSchedule || '3x per week'}\n` +
+      `Channel Tags: ${bp.channelTags?.join(', ') || 'youtube, content, creator'}\n` +
+      `Video Formats: ${bp.videoFormats?.map((f: any) => f.format).join(', ') || 'tutorials, shorts'}\n` +
+      `Title Formula: ${bp.titleFormula || 'How to [achieve result] in [timeframe]'}\n\n` +
+      `Based on this blueprint, help me plan my first 30 days of content with specific video ideas and titles.`
     )
     router.push(`/inspiration?msg=${msg}`)
   }
@@ -387,11 +408,9 @@ function CompetitorsPage() {
     <DashboardLayout title="Competitors">
       <div className="p-6 space-y-6">
 
-        {/* Clone Success Modal */}
         <AnimatePresence>
-          {showCloneSuccess && cloneBlueprint && (
+          {showCloneSuccess && (
             <CloneSuccessModal
-              blueprint={cloneBlueprint}
               channelName={analysis?.name || ''}
               onCheck={handleCloneCheck}
               onClose={() => setShowCloneSuccess(false)}
@@ -402,7 +421,7 @@ function CompetitorsPage() {
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-xl font-bold">👥 Competitor Intelligence</h1>
-            <p className="text-muted text-sm">Real YouTube data — stats, trending videos, revenue estimates</p>
+            <p className="text-muted text-sm">Real YouTube data — stats, videos, revenue, clone strategy</p>
           </div>
         </div>
 
@@ -480,74 +499,78 @@ function CompetitorsPage() {
               </div>
             )}
 
-            {/* Clone laser scanner */}
-            {cloning && (
-              <LaserScanner phase={clonePhase} total={CLONE_PHASES.length} />
-            )}
-
-            {!loading && !cloning && analysis && (
+            {!loading && analysis && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
 
-                {/* Channel Header */}
-                <div className="card">
-                  <div className="flex items-center gap-4 mb-4">
-                    {analysis.thumbnail ? (
-                      <img src={analysis.thumbnail} alt={analysis.name}
-                        className="w-14 h-14 rounded-xl object-cover border border-white/10 flex-shrink-0" />
-                    ) : (
-                      <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-cyan/20 to-magenta/20
-                                    flex items-center justify-center text-2xl font-display text-white flex-shrink-0">
-                        {analysis.name?.charAt(0)}
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <h2 className="text-lg font-bold text-white truncate">{analysis.name}</h2>
-                        <FiYoutube className="text-red-400 flex-shrink-0" size={14} />
-                      </div>
-                      <a href={analysis.channelUrl} target="_blank" rel="noopener noreferrer"
-                        className="text-xs text-cyan hover:underline flex items-center gap-1">
-                        <FiExternalLink size={10} /> View Channel
-                      </a>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <AIBadge />
-                      {/* CLONE BUTTON */}
-                      <button onClick={startClone}
-                        className="btn btn-sm gap-1.5 font-bold text-xs px-3 py-2
-                                  bg-gradient-to-r from-magenta/20 to-cyan/20 border border-cyan/30
-                                  text-cyan hover:from-magenta/30 hover:to-cyan/30 transition-all">
-                        <FiZap size={12} /> Clone Channel
-                      </button>
-                    </div>
-                  </div>
+                {/* Channel Header — laser scans THIS panel */}
+                <div className="relative" ref={channelPanelRef}>
+                  {/* Laser overlay — covers channel header to bottom of video list */}
+                  <CloneOverlay
+                    phase={clonePhase}
+                    isCloning={cloning}
+                    containerRef={channelPanelRef}
+                  />
 
-                  <div className="grid grid-cols-3 md:grid-cols-6 gap-2 mb-4">
-                    {[
-                      { label: 'Subscribers', value: analysis.subscriberCountFormatted, color: 'text-cyan' },
-                      { label: 'Total Views', value: analysis.totalViewsFormatted, color: 'text-green' },
-                      { label: 'Videos', value: analysis.videoCount, color: 'text-red-400' },
-                      { label: 'Avg Views', value: analysis.avgViewsFormatted, color: 'text-gold' },
-                      { label: 'New Subs (28d)', value: analysis.newSubsLast28Days, color: 'text-magenta' },
-                      { label: 'Est. Revenue/mo', value: analysis.estimatedMonthlyRevenue, color: 'text-gold' },
-                    ].map(s => (
-                      <div key={s.label} className="bg-surf2 rounded-xl p-2.5 text-center">
-                        <div className={`text-sm font-bold ${s.color}`}>{s.value || '—'}</div>
-                        <div className="text-[9px] text-muted mt-0.5 leading-tight">{s.label}</div>
+                  <div className="card">
+                    <div className="flex items-center gap-4 mb-4">
+                      {analysis.thumbnail ? (
+                        <img src={analysis.thumbnail} alt={analysis.name}
+                          className="w-14 h-14 rounded-xl object-cover border border-white/10 flex-shrink-0" />
+                      ) : (
+                        <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-cyan/20 to-magenta/20
+                                      flex items-center justify-center text-2xl font-display text-white flex-shrink-0">
+                          {analysis.name?.charAt(0)}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <h2 className="text-lg font-bold text-white truncate">{analysis.name}</h2>
+                          <FiYoutube className="text-red-400 flex-shrink-0" size={14} />
+                        </div>
+                        <a href={analysis.channelUrl} target="_blank" rel="noopener noreferrer"
+                          className="text-xs text-cyan hover:underline flex items-center gap-1">
+                          <FiExternalLink size={10} /> View Channel
+                        </a>
                       </div>
-                    ))}
-                  </div>
-
-                  <div className="p-3 bg-surf2 rounded-xl flex items-center gap-3">
-                    <div className="text-xs text-muted whitespace-nowrap">SEO Score</div>
-                    <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
-                      <div className="h-full rounded-full bg-gradient-to-r from-cyan to-green"
-                        style={{ width: `${analysis.channelSEOScore}%` }} />
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <AIBadge />
+                        <button onClick={startClone} disabled={cloning}
+                          className="btn btn-sm gap-1.5 font-bold text-xs px-3 py-2
+                                    bg-gradient-to-r from-magenta/20 to-cyan/20 border border-cyan/30
+                                    text-cyan hover:from-magenta/30 hover:to-cyan/30 transition-all disabled:opacity-50">
+                          <FiZap size={12} />
+                          {cloning ? 'Cloning...' : 'Clone Channel'}
+                        </button>
+                      </div>
                     </div>
-                    <SEOBadge score={analysis.channelSEOScore} />
-                    <div className="text-lg font-display font-bold flex-shrink-0" style={{
-                      color: analysis.channelSEOScore >= 75 ? '#00ff88' : analysis.channelSEOScore >= 50 ? '#ffc740' : '#ff0090'
-                    }}>{analysis.channelSEOScore}/100</div>
+
+                    <div className="grid grid-cols-3 md:grid-cols-6 gap-2 mb-4">
+                      {[
+                        { label: 'Subscribers', value: analysis.subscriberCountFormatted, color: 'text-cyan' },
+                        { label: 'Total Views', value: analysis.totalViewsFormatted, color: 'text-green' },
+                        { label: 'Videos', value: analysis.videoCount, color: 'text-red-400' },
+                        { label: 'Avg Views', value: analysis.avgViewsFormatted, color: 'text-gold' },
+                        { label: 'New Subs (28d)', value: analysis.newSubsLast28Days, color: 'text-magenta' },
+                        { label: 'Est. Revenue/mo', value: analysis.estimatedMonthlyRevenue, color: 'text-gold' },
+                      ].map(s => (
+                        <div key={s.label} className="bg-surf2 rounded-xl p-2.5 text-center">
+                          <div className={`text-sm font-bold ${s.color}`}>{s.value || '—'}</div>
+                          <div className="text-[9px] text-muted mt-0.5 leading-tight">{s.label}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="p-3 bg-surf2 rounded-xl flex items-center gap-3">
+                      <div className="text-xs text-muted whitespace-nowrap">SEO Score</div>
+                      <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full bg-gradient-to-r from-cyan to-green"
+                          style={{ width: `${analysis.channelSEOScore}%` }} />
+                      </div>
+                      <SEOBadge score={analysis.channelSEOScore} />
+                      <div className="text-lg font-display font-bold flex-shrink-0" style={{
+                        color: analysis.channelSEOScore >= 75 ? '#00ff88' : analysis.channelSEOScore >= 50 ? '#ffc740' : '#ff0090'
+                      }}>{analysis.channelSEOScore}/100</div>
+                    </div>
                   </div>
                 </div>
 
@@ -622,71 +645,73 @@ function CompetitorsPage() {
                   )}
                 </div>
 
-                {/* Similar Channels — real YouTube data */}
+                {/* Similar Channels */}
                 <div className="card">
                   <div className="flex items-center gap-3 mb-4">
                     <h3 className="font-bold text-white">🤝 Similar Channels to Track</h3>
                     {loadingSuggestions && <Spinner size={13} />}
                   </div>
-                  {suggestions.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {suggestions.map((ch: any, i: number) => (
-                        <motion.button key={i}
-                          initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-                          transition={{ delay: i * 0.06 }}
-                          onClick={() => analyze(ch.name || ch, false)}
-                          className="flex items-center gap-3 p-3 bg-surf2 rounded-xl border border-white/5
-                                    hover:border-cyan/20 hover:bg-cyan/5 transition-all text-left group">
-                          <div className="relative flex-shrink-0">
-                            {ch.thumbnail ? (
-                              <img src={ch.thumbnail} alt={ch.name}
-                                className="w-10 h-10 rounded-full object-cover border border-white/10" />
-                            ) : (
-                              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan/20 to-magenta/20
-                                            flex items-center justify-center text-white font-bold text-sm">
-                                {(ch.name || ch).charAt(0).toUpperCase()}
-                              </div>
-                            )}
-                            <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-red-600 rounded-full flex items-center justify-center">
-                              <FiYoutube size={8} className="text-white" />
-                            </div>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-semibold text-white truncate group-hover:text-cyan transition-colors">
-                              {ch.name || ch}
-                            </div>
-                            {ch.subscriberCount > 0 && (
-                              <div className="flex items-center gap-2 mt-0.5">
-                                <span className="text-xs text-cyan flex items-center gap-1">
-                                  <FiUsers size={9} /> {formatNum(ch.subscriberCount)} subs
-                                </span>
-                                {ch.videoCount > 0 && (
-                                  <span className="text-xs text-muted">{ch.videoCount} videos</span>
-                                )}
-                              </div>
-                            )}
-                            <div className="text-[10px] text-muted mt-0.5">Click to analyze →</div>
-                          </div>
-                        </motion.button>
-                      ))}
-                    </div>
-                  ) : !loadingSuggestions ? (
-                    <p className="text-muted text-sm text-center py-4">
-                      Analyze a competitor to see similar channel suggestions
-                    </p>
-                  ) : (
+                  {loadingSuggestions ? (
                     <div className="flex justify-center py-6">
                       <div className="loading-dots flex"><span /><span /><span /></div>
                     </div>
+                  ) : suggestions.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {suggestions.map((ch: any, i: number) => {
+                        const name = typeof ch === 'string' ? ch : ch.name
+                        const thumbnail = typeof ch === 'object' ? ch.thumbnail : null
+                        const subs = typeof ch === 'object' ? ch.subscriberCount : 0
+                        const vids = typeof ch === 'object' ? ch.videoCount : 0
+                        return (
+                          <motion.button key={i}
+                            initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: i * 0.06 }}
+                            onClick={() => analyze(name, false)}
+                            className="flex items-center gap-3 p-3 bg-surf2 rounded-xl border border-white/5
+                                      hover:border-cyan/20 hover:bg-cyan/5 transition-all text-left group">
+                            <div className="relative flex-shrink-0">
+                              {thumbnail ? (
+                                <img src={thumbnail} alt={name}
+                                  className="w-10 h-10 rounded-full object-cover border border-white/10" />
+                              ) : (
+                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan/20 to-magenta/20
+                                              flex items-center justify-center text-white font-bold text-sm">
+                                  {name?.charAt(0)?.toUpperCase()}
+                                </div>
+                              )}
+                              <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-red-600 rounded-full flex items-center justify-center">
+                                <FiYoutube size={8} className="text-white" />
+                              </div>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-semibold text-white truncate group-hover:text-cyan transition-colors">{name}</div>
+                              {subs > 0 && (
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="text-xs text-cyan flex items-center gap-1">
+                                    <FiUsers size={9} /> {formatNum(subs)} subs
+                                  </span>
+                                  {vids > 0 && <span className="text-xs text-muted">{vids} videos</span>}
+                                </div>
+                              )}
+                              <div className="text-[10px] text-muted mt-0.5">Click to analyze →</div>
+                            </div>
+                          </motion.button>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-muted text-sm text-center py-4">
+                      No similar channels found yet. Try analyzing a different channel.
+                    </p>
                   )}
                 </div>
 
               </motion.div>
             )}
 
-            {!loading && !cloning && !analysis && (
+            {!loading && !analysis && (
               <EmptyState icon="👥" title="Search for a competitor"
-                description="Enter any YouTube channel name — get real stats, trending videos, SEO scores, revenue, and clone their strategy" />
+                description="Enter any YouTube channel name to get real stats, trending videos, SEO scores, and clone their strategy" />
             )}
           </div>
         </div>
