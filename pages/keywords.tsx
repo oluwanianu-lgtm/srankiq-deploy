@@ -1,4 +1,4 @@
-// pages/keywords.tsx — adds easyKeywords "Best Keywords to Use" section
+// pages/2-keywords.tsx  (replace keywords.tsx)
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import DashboardLayout from '../components/layout/DashboardLayout'
@@ -91,6 +91,11 @@ function KeywordsPage() {
 
   const useInAITools = (kw: string) => router.push(`/ai-tools?topic=${encodeURIComponent(kw)}`)
 
+  // Click channel → redirect to competitors page with channel auto-analyzed
+  const analyzeChannel = (ch: TopChannel) => {
+    router.push(`/competitors?channel=${encodeURIComponent(ch.channelTitle)}`)
+  }
+
   const exportCSV = () => {
     const all = [...relatedKeywords, ...easyKeywords]
     if (!all.length) return
@@ -105,68 +110,13 @@ function KeywordsPage() {
   const volBadge = (v: string) => v === 'Very High' ? 'badge-green' : v === 'High' ? 'badge-cyan' : v === 'Medium' ? 'badge-gold' : 'badge-magenta'
   const compBadge = (c: string) => c === 'Easy' ? 'badge-green' : c === 'Medium' ? 'badge-gold' : 'badge-red'
 
-  const KeywordTable = ({ rows, title, subtitle, showIndex = false, highlightEasy = false }:
-    { rows: KeywordRow[]; title: string; subtitle?: string; showIndex?: boolean; highlightEasy?: boolean }) => (
-    <div className="card overflow-x-auto">
-      <div className="mb-4">
-        <h3 className="font-bold text-white flex items-center gap-2">
-          {highlightEasy && <FiStar size={14} className="text-gold" />}
-          {title}
-        </h3>
-        {subtitle && <p className="text-xs text-muted mt-0.5">{subtitle}</p>}
-      </div>
-      <table className="data-table">
-        <thead>
-          <tr>
-            {showIndex && <th>#</th>}
-            <th>Keyword</th><th>Videos</th><th>Volume</th><th>Competition</th>
-            <th>Ranking Chance</th><th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <motion.tr key={i} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.03 }}
-              className={highlightEasy && r.competition === 'Easy' ? 'bg-green/5' : ''}>
-              {showIndex && <td className="text-muted text-sm w-8">{i + 1}</td>}
-              <td className="font-medium text-white">
-                {r.keyword}
-                {highlightEasy && r.competition === 'Easy' && (
-                  <span className="ml-2 text-[9px] px-1.5 py-0.5 rounded bg-green/20 text-green">Easy win</span>
-                )}
-              </td>
-              <td className="text-muted text-sm">{formatNum(r.videoCount)}</td>
-              <td><span className={`badge text-[10px] ${volBadge(r.volume)}`}>{r.volume}</span></td>
-              <td><span className={`badge text-[10px] ${compBadge(r.competition)}`}>{r.competition}</span></td>
-              <td className="min-w-[120px]"><RankingBar value={r.rankingChance} /></td>
-              <td>
-                <div className="flex gap-1.5">
-                  <button onClick={() => {
-                    if (!keywords.includes(r.keyword) && keywords.length < MAX) { setKeywords(p => [...p, r.keyword]); toast.success('Added') }
-                    else if (keywords.length >= MAX) toast.error('Max reached')
-                  }} className="text-[10px] px-2 py-1 rounded-full bg-surf2 border border-white/10 text-muted hover:text-white hover:border-white/20 transition-colors">
-                    + Add
-                  </button>
-                  <button onClick={() => useInAITools(r.keyword)}
-                    className="text-[10px] px-2 py-1 rounded-full bg-cyan/10 border border-cyan/20 text-cyan hover:bg-cyan/20 transition-colors font-semibold">
-                    Use →
-                  </button>
-                </div>
-              </td>
-            </motion.tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
-
   return (
     <DashboardLayout title="Keyword Research">
       <div className="p-6 space-y-6">
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-xl font-bold">🔍 Keyword Research</h1>
-            <p className="text-muted text-sm">Find real YouTube keywords — click Use to open in AI Tools</p>
+            <p className="text-muted text-sm">Real YouTube keywords — click Use for AI Tools, click channels to analyze them</p>
           </div>
           {(relatedKeywords.length > 0 || easyKeywords.length > 0) && (
             <button onClick={exportCSV} className="btn btn-ghost btn-sm gap-1.5">
@@ -224,18 +174,76 @@ function KeywordsPage() {
           {!loading && searched && (results.length > 0 || relatedKeywords.length > 0 || easyKeywords.length > 0) && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
 
+              {/* Your keywords */}
               {results.length > 0 && (
-                <KeywordTable rows={results} title="📊 Your Keywords — Ranking Potential" showIndex={false} />
+                <div className="card overflow-x-auto">
+                  <h3 className="font-bold text-white mb-4">📊 Your Keywords — Ranking Potential</h3>
+                  <table className="data-table">
+                    <thead><tr><th>Keyword</th><th>Videos</th><th>Volume</th><th>Competition</th><th>Ranking Chance</th><th>Trend</th><th></th></tr></thead>
+                    <tbody>
+                      {results.map((r, i) => (
+                        <motion.tr key={i} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}>
+                          <td className="font-semibold text-white">{r.keyword}</td>
+                          <td className="text-muted text-sm">{formatNum(r.videoCount)}</td>
+                          <td><span className={`badge ${volBadge(r.volume)}`}>{r.volume}</span></td>
+                          <td><span className={`badge ${compBadge(r.competition)}`}>{r.competition}</span></td>
+                          <td className="min-w-[140px]"><RankingBar value={r.rankingChance} /></td>
+                          <td><span className={`text-sm font-semibold ${r.trend === 'Rising' ? 'text-green' : r.trend === 'Stable' ? 'text-cyan' : 'text-muted'}`}>
+                            {r.trend === 'Rising' ? '↑' : r.trend === 'Declining' ? '↓' : '→'} {r.trend}
+                          </span></td>
+                          <td>
+                            <button onClick={() => useInAITools(r.keyword)}
+                              className="flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-lg bg-cyan/10 text-cyan border border-cyan/20 hover:bg-cyan/20 transition-colors font-semibold whitespace-nowrap">
+                              Use <FiArrowRight size={9} />
+                            </button>
+                          </td>
+                        </motion.tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
 
+              {/* Related keywords */}
               {relatedKeywords.length > 0 && (
-                <KeywordTable rows={relatedKeywords}
-                  title={`🎯 ${relatedKeywords.length} Related Keywords`}
-                  subtitle="Real YouTube search suggestions — click Use to open in AI Tools"
-                  showIndex={true} />
+                <div className="card overflow-x-auto">
+                  <div className="mb-4">
+                    <h3 className="font-bold text-white">🎯 {relatedKeywords.length} Related Keywords</h3>
+                    <p className="text-xs text-muted mt-0.5">Click Use → AI Tools · Click channels → Competitor analysis</p>
+                  </div>
+                  <table className="data-table">
+                    <thead><tr><th>#</th><th>Keyword</th><th>Videos</th><th>Volume</th><th>Competition</th><th>Ranking Chance</th><th></th></tr></thead>
+                    <tbody>
+                      {relatedKeywords.map((r, i) => (
+                        <motion.tr key={i} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
+                          <td className="text-muted text-sm w-8">{i + 1}</td>
+                          <td className="font-medium text-white">{r.keyword}</td>
+                          <td className="text-muted text-sm">{formatNum(r.videoCount)}</td>
+                          <td><span className={`badge text-[10px] ${volBadge(r.volume)}`}>{r.volume}</span></td>
+                          <td><span className={`badge text-[10px] ${compBadge(r.competition)}`}>{r.competition}</span></td>
+                          <td className="min-w-[120px]"><RankingBar value={r.rankingChance} /></td>
+                          <td>
+                            <div className="flex gap-1.5">
+                              <button onClick={() => {
+                                if (!keywords.includes(r.keyword) && keywords.length < MAX) { setKeywords(p => [...p, r.keyword]); toast.success('Added') }
+                                else if (keywords.length >= MAX) toast.error('Max reached')
+                              }} className="text-[10px] px-2 py-1 rounded-full bg-surf2 border border-white/10 text-muted hover:text-white hover:border-white/20 transition-colors">
+                                + Add
+                              </button>
+                              <button onClick={() => useInAITools(r.keyword)}
+                                className="text-[10px] px-2 py-1 rounded-full bg-cyan/10 border border-cyan/20 text-cyan hover:bg-cyan/20 transition-colors font-semibold">
+                                Use →
+                              </button>
+                            </div>
+                          </td>
+                        </motion.tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
 
-              {/* ✨ EASY KEYWORDS SECTION */}
+              {/* Easy keywords */}
               {easyKeywords.length > 0 && (
                 <div className="card overflow-x-auto">
                   <div className="mb-4">
@@ -247,14 +255,11 @@ function KeywordsPage() {
                       </span>
                     </div>
                     <p className="text-xs text-muted">
-                      These keywords have significantly lower competition than mainstream terms — they can get you
-                      more targeted views and help smaller channels rank faster. Perfect for building momentum.
+                      These have significantly lower competition — ideal for building channel momentum and ranking faster than bigger channels.
                     </p>
                   </div>
                   <table className="data-table">
-                    <thead>
-                      <tr><th>#</th><th>Keyword</th><th>Videos</th><th>Volume</th><th>Competition</th><th>Ranking Chance</th><th></th></tr>
-                    </thead>
+                    <thead><tr><th>#</th><th>Keyword</th><th>Videos</th><th>Volume</th><th>Competition</th><th>Ranking Chance</th><th></th></tr></thead>
                     <tbody>
                       {easyKeywords.map((r, i) => (
                         <motion.tr key={i} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
@@ -263,12 +268,8 @@ function KeywordsPage() {
                           <td className="text-muted text-sm w-8">{i + 1}</td>
                           <td className="font-medium text-white">
                             {r.keyword}
-                            {r.competition === 'Easy' && (
-                              <span className="ml-2 text-[9px] px-1.5 py-0.5 rounded bg-green/20 text-green">✓ Easy win</span>
-                            )}
-                            {r.competition === 'Medium' && r.rankingChance >= 50 && (
-                              <span className="ml-2 text-[9px] px-1.5 py-0.5 rounded bg-gold/20 text-gold">↗ Good shot</span>
-                            )}
+                            {r.competition === 'Easy' && <span className="ml-2 text-[9px] px-1.5 py-0.5 rounded bg-green/20 text-green">✓ Easy win</span>}
+                            {r.competition === 'Medium' && r.rankingChance >= 50 && <span className="ml-2 text-[9px] px-1.5 py-0.5 rounded bg-gold/20 text-gold">↗ Good shot</span>}
                           </td>
                           <td className="text-muted text-sm">{formatNum(r.videoCount)}</td>
                           <td><span className={`badge text-[10px] ${volBadge(r.volume)}`}>{r.volume}</span></td>
@@ -295,14 +296,20 @@ function KeywordsPage() {
                 </div>
               )}
 
+              {/* Top channels — clicking redirects to competitors */}
               {topChannels.length > 0 && (
                 <div className="card">
-                  <h3 className="font-bold text-white mb-4">🏆 Top Channels Using These Keywords</h3>
+                  <div className="mb-4">
+                    <h3 className="font-bold text-white">🏆 Top Channels Using These Keywords</h3>
+                    <p className="text-xs text-muted mt-0.5">Click any channel to open full competitor analysis →</p>
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {topChannels.map((ch, i) => (
                       <motion.div key={ch.channelId} initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
                         transition={{ delay: i * 0.05 }}
-                        className="flex items-center gap-3 p-3 bg-surf2 rounded-xl border border-white/5 hover:border-white/10 transition-all">
+                        onClick={() => analyzeChannel(ch)}
+                        className="flex items-center gap-3 p-3 bg-surf2 rounded-xl border border-white/5
+                                  hover:border-cyan/20 hover:bg-cyan/5 transition-all cursor-pointer group">
                         <div className="relative flex-shrink-0">
                           {ch.thumbnail
                             ? <img src={ch.thumbnail} alt={ch.channelTitle} className="w-10 h-10 rounded-full object-cover border border-white/10" />
@@ -313,18 +320,16 @@ function KeywordsPage() {
                           </div>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm font-semibold text-white truncate">{ch.channelTitle}</div>
+                          <div className="text-sm font-semibold text-white truncate group-hover:text-cyan transition-colors">{ch.channelTitle}</div>
                           <div className="flex items-center gap-3 mt-0.5">
                             <span className="text-xs text-cyan flex items-center gap-1"><FiUsers size={10} /> {formatNum(ch.subscriberCount)} subs</span>
                             <span className="text-xs text-muted">{formatNum(ch.viewCount)} views</span>
                           </div>
                           <div className="text-[10px] text-muted/60 mt-0.5">keyword: <span className="text-cyan/60">{ch.keyword}</span></div>
                         </div>
-                        <a href={ch.url} target="_blank" rel="noopener noreferrer">
-                          <button className="w-7 h-7 rounded-lg hover:bg-white/10 flex items-center justify-center text-muted hover:text-cyan transition-colors">
-                            <FiExternalLink size={13} />
-                          </button>
-                        </a>
+                        <div className="text-[10px] text-cyan font-semibold opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                          Analyze →
+                        </div>
                       </motion.div>
                     ))}
                   </div>

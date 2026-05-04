@@ -1,4 +1,4 @@
-// pages/inspiration.tsx
+// pages/2-inspiration.tsx  (replace inspiration.tsx)
 import React, { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import DashboardLayout from '../components/layout/DashboardLayout'
@@ -7,7 +7,7 @@ import { usePlatform } from '../contexts/PlatformContext'
 import { Spinner } from '../components/ui'
 import axios from 'axios'
 import toast from 'react-hot-toast'
-import { FiSend, FiCopy, FiZap, FiRotateCcw, FiArrowRight } from 'react-icons/fi'
+import { FiSend, FiCopy, FiZap, FiRotateCcw, FiArrowRight, FiSun, FiMoon } from 'react-icons/fi'
 import { useRouter } from 'next/router'
 
 interface Message {
@@ -17,23 +17,72 @@ interface Message {
   timestamp: Date
 }
 
+type Theme = 'dark' | 'light' | 'red'
+
+const THEMES: { key: Theme; label: string; icon: string }[] = [
+  { key: 'dark', label: 'Dark', icon: '🌙' },
+  { key: 'light', label: 'Light', icon: '☀️' },
+  { key: 'red', label: 'Crimson', icon: '🔴' },
+]
+
+const THEME_STYLES: Record<Theme, {
+  bg: string; sidebar: string; bubble_ai: string; bubble_user: string;
+  input: string; text: string; muted: string; border: string; accent: string
+}> = {
+  dark: {
+    bg: 'bg-transparent',
+    sidebar: 'bg-surf2/80 border-white/5',
+    bubble_ai: 'bg-[#1a1a2e] border border-white/10 text-white/90',
+    bubble_user: 'bg-cyan/15 border border-cyan/30 text-white',
+    input: 'bg-[#1a1a2e] border-white/10 text-white placeholder-white/30',
+    text: 'text-white',
+    muted: 'text-white/40',
+    border: 'border-white/5',
+    accent: 'text-cyan',
+  },
+  light: {
+    bg: 'bg-white',
+    sidebar: 'bg-gray-50 border-gray-200',
+    bubble_ai: 'bg-gray-100 border border-gray-200 text-gray-800',
+    bubble_user: 'bg-blue-500 border border-blue-600 text-white',
+    input: 'bg-white border-gray-300 text-gray-800 placeholder-gray-400',
+    text: 'text-gray-800',
+    muted: 'text-gray-400',
+    border: 'border-gray-200',
+    accent: 'text-blue-500',
+  },
+  red: {
+    bg: 'bg-[#0d0000]',
+    sidebar: 'bg-[#1a0000]/80 border-red-900/30',
+    bubble_ai: 'bg-[#1a0505] border border-red-900/30 text-white/90',
+    bubble_user: 'bg-red-700/30 border border-red-600/40 text-white',
+    input: 'bg-[#1a0505] border-red-900/30 text-white placeholder-red-300/30',
+    text: 'text-white',
+    muted: 'text-red-300/40',
+    border: 'border-red-900/20',
+    accent: 'text-red-400',
+  },
+}
+
 const STARTERS = [
-  "Give me 5 viral video ideas for my channel",
-  "What's trending in tech YouTube right now?",
-  "Help me come up with a hook for a finance video",
-  "What type of videos get the most subscribers?",
-  "Give me a content calendar for next week",
-  "How do I make my titles more clickable?",
+  { icon: '🔥', text: 'Give me 5 viral video ideas for my channel' },
+  { icon: '📈', text: "What's trending in my niche right now?" },
+  { icon: '🪝', text: 'Help me write a powerful hook for my next video' },
+  { icon: '🎯', text: 'What type of videos get the most subscribers?' },
+  { icon: '📅', text: 'Give me a content calendar for next 30 days' },
+  { icon: '📝', text: 'How do I write titles that get more clicks?' },
 ]
 
 function InspirationPage() {
   const { activePlatform } = usePlatform()
   const router = useRouter()
   const autoSentRef = useRef(false)
+  const [theme, setTheme] = useState<Theme>('dark')
+  const t = THEME_STYLES[theme]
 
   const [messages, setMessages] = useState<Message[]>([{
     role: 'assistant',
-    content: `Hey! I'm your AI content inspiration assistant. Tell me about your channel or niche and I'll help you brainstorm viral video ideas, hooks, titles, and content strategies. What are you working on? 🎬`,
+    content: `Hey! I'm SRankIQ's AI content strategist. I help creators like you build viral channels, find trending video ideas, write compelling hooks, and grow faster. What's your channel about? 🎬`,
     timestamp: new Date(),
   }])
   const [input, setInput] = useState('')
@@ -45,44 +94,49 @@ function InspirationPage() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Auto-send message from trends "Use idea" button
   useEffect(() => {
     const msg = router.query.msg as string
     if (msg && !autoSentRef.current) {
       autoSentRef.current = true
       const decoded = decodeURIComponent(msg)
-      // Small delay to let page mount
       setTimeout(() => send(decoded), 400)
     }
   }, [router.query.msg])
+
+  // Load theme from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('srankiq_theme') as Theme
+    if (saved && THEME_STYLES[saved]) setTheme(saved)
+  }, [])
+
+  const switchTheme = (t: Theme) => {
+    setTheme(t)
+    localStorage.setItem('srankiq_theme', t)
+  }
 
   const send = async (text?: string) => {
     const msg = (text || input).trim()
     if (!msg || loading) return
     setInput('')
-
     const userMsg: Message = { role: 'user', content: msg, timestamp: new Date() }
     setMessages(prev => [...prev, userMsg])
     setLoading(true)
-
     try {
       const history = messages.map(m => ({ role: m.role, content: m.content }))
       const res = await axios.post('/api/ai/inspiration', {
-        message: msg,
-        history,
+        message: msg, history,
         platform: activePlatform === 'yt' ? 'YouTube' : activePlatform,
       })
-      const assistantMsg: Message = {
+      setMessages(prev => [...prev, {
         role: 'assistant',
         content: res.data.reply,
         ideas: res.data.ideas,
         timestamp: new Date(),
-      }
-      setMessages(prev => [...prev, assistantMsg])
+      }])
     } catch {
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: 'Sorry, I had trouble generating a response. Please try again.',
+        content: 'Sorry, I had trouble responding. Please try again.',
         timestamp: new Date(),
       }])
     } finally {
@@ -91,92 +145,147 @@ function InspirationPage() {
     }
   }
 
-  const copyText = (text: string) => { navigator.clipboard.writeText(text); toast.success('Copied!') }
-
+  const copy = (text: string) => { navigator.clipboard.writeText(text); toast.success('Copied!') }
   const useInAITools = (idea: string) => router.push(`/ai-tools?topic=${encodeURIComponent(idea)}`)
 
   const clearChat = () => {
     autoSentRef.current = false
     setMessages([{
       role: 'assistant',
-      content: `Hey! I'm your AI content inspiration assistant. Tell me about your channel or niche and I'll help you brainstorm viral video ideas, hooks, titles, and content strategies. What are you working on? 🎬`,
+      content: `Hey! I'm SRankIQ's AI content strategist. I help creators like you build viral channels, find trending video ideas, write compelling hooks, and grow faster. What's your channel about? 🎬`,
       timestamp: new Date(),
     }])
   }
 
+  const formatTime = (d: Date) =>
+    d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+
   return (
     <DashboardLayout title="Get Inspiration">
-      <div className="flex flex-col h-full">
+      <div className={`flex flex-col h-full ${theme === 'light' ? 'bg-gray-50' : theme === 'red' ? 'bg-[#0d0000]' : ''}`}>
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 flex-shrink-0">
-          <div>
-            <h1 className="text-xl font-bold flex items-center gap-2">
-              💡 Get Inspiration
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-lime/20 text-lime font-bold uppercase tracking-wider">AI Chat</span>
-            </h1>
-            <p className="text-muted text-sm">Chat with AI to brainstorm video ideas, hooks, and content strategies</p>
+        {/* Header — Claude-style */}
+        <div className={`flex items-center justify-between px-5 py-3 border-b ${t.border} flex-shrink-0 backdrop-blur-sm`}
+          style={{ background: theme === 'light' ? 'white' : theme === 'red' ? 'rgba(26,0,0,0.9)' : 'rgba(10,10,20,0.9)' }}>
+          <div className="flex items-center gap-3">
+            {/* SRankIQ avatar */}
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg font-bold flex-shrink-0
+              ${theme === 'red' ? 'bg-red-900/40 border border-red-700/40' : 'bg-gradient-to-br from-cyan/20 to-magenta/20 border border-cyan/20'}`}>
+              ✦
+            </div>
+            <div>
+              <div className={`font-bold text-sm ${t.text}`}>SRankIQ AI</div>
+              <div className={`text-[10px] ${t.muted} flex items-center gap-1`}>
+                <span className="w-1.5 h-1.5 rounded-full bg-green inline-block animate-pulse" />
+                Content Strategy Assistant
+              </div>
+            </div>
           </div>
-          <button onClick={clearChat} className="btn btn-ghost btn-sm gap-1.5 text-muted hover:text-white">
-            <FiRotateCcw size={13} /> New Chat
-          </button>
+
+          <div className="flex items-center gap-2">
+            {/* Theme switcher */}
+            <div className={`flex items-center gap-1 p-1 rounded-lg border ${t.border}`}
+              style={{ background: theme === 'light' ? '#f3f4f6' : 'rgba(255,255,255,0.05)' }}>
+              {THEMES.map(th => (
+                <button key={th.key} onClick={() => switchTheme(th.key)}
+                  title={th.label}
+                  className={`w-7 h-7 rounded-md text-sm transition-all flex items-center justify-center
+                    ${theme === th.key
+                      ? theme === 'light' ? 'bg-white shadow text-gray-800' : 'bg-white/15'
+                      : 'hover:bg-white/10 opacity-50 hover:opacity-100'
+                    }`}>
+                  {th.icon}
+                </button>
+              ))}
+            </div>
+
+            <button onClick={clearChat}
+              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border ${t.border} ${t.muted} hover:${t.text} transition-colors`}
+              style={{ background: theme === 'light' ? '#f9fafb' : 'rgba(255,255,255,0.04)' }}>
+              <FiRotateCcw size={12} /> New Chat
+            </button>
+          </div>
         </div>
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+        {/* Messages area */}
+        <div className="flex-1 overflow-y-auto px-4 py-6 space-y-6 max-w-4xl mx-auto w-full">
 
-          {/* Starter prompts */}
+          {/* Starter prompts — only on fresh chat */}
           {messages.length === 1 && !loading && (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4">
               {STARTERS.map((s, i) => (
                 <motion.button key={i}
                   initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.05 }}
-                  onClick={() => send(s)}
-                  className="text-left p-3 rounded-xl bg-surf2 border border-white/5
-                            hover:border-cyan/20 hover:bg-cyan/5 transition-all text-xs
-                            text-muted hover:text-white leading-relaxed">
-                  <FiZap size={11} className="text-cyan mb-1.5" />
-                  {s}
+                  transition={{ delay: i * 0.04 }}
+                  onClick={() => send(s.text)}
+                  className={`text-left p-3 rounded-xl border text-xs leading-relaxed transition-all hover:scale-[1.01] ${
+                    theme === 'light'
+                      ? 'bg-white border-gray-200 text-gray-600 hover:border-blue-300 hover:bg-blue-50'
+                      : theme === 'red'
+                      ? 'bg-[#1a0505] border-red-900/30 text-red-300/70 hover:border-red-600/40 hover:bg-red-900/20'
+                      : 'bg-surf2 border-white/5 text-white/50 hover:border-cyan/20 hover:bg-cyan/5 hover:text-white/80'
+                  }`}>
+                  <div className="text-base mb-1">{s.icon}</div>
+                  {s.text}
                 </motion.button>
               ))}
             </div>
           )}
 
           {messages.map((msg, i) => (
-            <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-              className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+            <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+              className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
 
-              <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm
-                             ${msg.role === 'assistant'
-                               ? 'bg-gradient-to-br from-cyan/30 to-magenta/30 border border-cyan/20 text-cyan'
-                               : 'bg-gradient-to-br from-white/10 to-white/5 border border-white/10 text-white'}`}>
-                {msg.role === 'assistant' ? '✦' : <span className="text-xs font-bold">U</span>}
+              {/* Avatar */}
+              <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold self-end
+                ${msg.role === 'assistant'
+                  ? theme === 'red'
+                    ? 'bg-red-900/40 border border-red-700/40 text-red-400'
+                    : theme === 'light'
+                    ? 'bg-blue-100 border border-blue-200 text-blue-600'
+                    : 'bg-gradient-to-br from-cyan/30 to-magenta/30 border border-cyan/20 text-cyan'
+                  : theme === 'light'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gradient-to-br from-white/15 to-white/5 border border-white/15 text-white'
+                }`}>
+                {msg.role === 'assistant' ? '✦' : 'U'}
               </div>
 
-              <div className={`flex-1 max-w-[80%] flex flex-col gap-2 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap
-                               ${msg.role === 'user'
-                                 ? 'bg-cyan/10 border border-cyan/20 text-white rounded-tr-sm'
-                                 : 'bg-surf2 border border-white/5 text-white/90 rounded-tl-sm'}`}>
+              <div className={`flex flex-col gap-1 max-w-[75%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                {/* Sender label */}
+                <div className={`text-[10px] ${t.muted} px-1`}>
+                  {msg.role === 'assistant' ? 'SRankIQ AI' : 'You'} · {formatTime(msg.timestamp)}
+                </div>
+
+                {/* Bubble */}
+                <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words
+                  ${msg.role === 'user' ? 'rounded-tr-sm' : 'rounded-tl-sm'} ${
+                  msg.role === 'assistant' ? t.bubble_ai : t.bubble_user
+                }`}>
                   {msg.content}
                 </div>
 
+                {/* Idea chips */}
                 {msg.ideas && msg.ideas.length > 0 && (
-                  <div className="space-y-2 w-full">
+                  <div className="space-y-1.5 w-full mt-1">
                     {msg.ideas.map((idea, j) => (
-                      <div key={j} className="flex items-center gap-2 p-2.5 bg-surf3 rounded-xl
-                                border border-white/5 hover:border-white/10 transition-all group">
-                        <span className="text-xs font-bold text-cyan flex-shrink-0 w-5">{j + 1}.</span>
-                        <span className="text-xs text-white/80 flex-1">{idea}</span>
+                      <div key={j}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs transition-all group
+                          ${theme === 'light'
+                            ? 'bg-blue-50 border-blue-200 text-gray-700 hover:border-blue-400'
+                            : theme === 'red'
+                            ? 'bg-red-900/20 border-red-800/30 text-white/80 hover:border-red-600/50'
+                            : 'bg-surf3 border-white/5 text-white/80 hover:border-white/15'
+                          }`}>
+                        <span className={`font-bold text-[10px] flex-shrink-0 ${t.accent}`}>{j + 1}.</span>
+                        <span className="flex-1">{idea}</span>
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => copyText(idea)}
-                            className="w-6 h-6 rounded hover:bg-white/10 flex items-center justify-center text-muted hover:text-white">
+                          <button onClick={() => copy(idea)} title="Copy"
+                            className={`w-6 h-6 rounded-lg flex items-center justify-center ${t.muted} hover:${t.text}`}>
                             <FiCopy size={10} />
                           </button>
-                          <button onClick={() => useInAITools(idea)}
-                            className="w-6 h-6 rounded hover:bg-cyan/20 flex items-center justify-center text-muted hover:text-cyan"
-                            title="Use in AI Tools">
+                          <button onClick={() => useInAITools(idea)} title="Use in AI Tools"
+                            className={`w-6 h-6 rounded-lg flex items-center justify-center ${t.muted} hover:${t.accent}`}>
                             <FiArrowRight size={10} />
                           </button>
                         </div>
@@ -185,22 +294,35 @@ function InspirationPage() {
                   </div>
                 )}
 
+                {/* Copy button for assistant */}
                 {msg.role === 'assistant' && i > 0 && (
-                  <button onClick={() => copyText(msg.content)}
-                    className="flex items-center gap-1 text-[10px] text-muted hover:text-white transition-colors">
-                    <FiCopy size={10} /> Copy
+                  <button onClick={() => copy(msg.content)}
+                    className={`flex items-center gap-1 text-[10px] ${t.muted} hover:${t.text} transition-colors px-1`}>
+                    <FiCopy size={9} /> Copy response
                   </button>
                 )}
               </div>
             </motion.div>
           ))}
 
+          {/* Loading indicator */}
           {loading && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-3">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan/30 to-magenta/30
-                            border border-cyan/20 flex items-center justify-center text-cyan flex-shrink-0">✦</div>
-              <div className="px-4 py-3 rounded-2xl rounded-tl-sm bg-surf2 border border-white/5">
-                <div className="loading-dots flex gap-1"><span /><span /><span /></div>
+              <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center
+                ${theme === 'red' ? 'bg-red-900/40 border border-red-700/40 text-red-400'
+                  : theme === 'light' ? 'bg-blue-100 border border-blue-200 text-blue-600'
+                  : 'bg-gradient-to-br from-cyan/30 to-magenta/30 border border-cyan/20 text-cyan'}`}>
+                ✦
+              </div>
+              <div className={`px-4 py-3 rounded-2xl rounded-tl-sm text-sm ${t.bubble_ai}`}>
+                <div className="flex items-center gap-1.5">
+                  <motion.span animate={{ opacity: [0.3,1,0.3] }} transition={{ repeat: Infinity, duration: 1.2, delay: 0 }}
+                    className={`w-2 h-2 rounded-full ${theme === 'red' ? 'bg-red-500' : theme === 'light' ? 'bg-blue-400' : 'bg-cyan'}`} />
+                  <motion.span animate={{ opacity: [0.3,1,0.3] }} transition={{ repeat: Infinity, duration: 1.2, delay: 0.2 }}
+                    className={`w-2 h-2 rounded-full ${theme === 'red' ? 'bg-red-500' : theme === 'light' ? 'bg-blue-400' : 'bg-cyan'}`} />
+                  <motion.span animate={{ opacity: [0.3,1,0.3] }} transition={{ repeat: Infinity, duration: 1.2, delay: 0.4 }}
+                    className={`w-2 h-2 rounded-full ${theme === 'red' ? 'bg-red-500' : theme === 'light' ? 'bg-blue-400' : 'bg-cyan'}`} />
+                </div>
               </div>
             </motion.div>
           )}
@@ -208,27 +330,35 @@ function InspirationPage() {
           <div ref={bottomRef} />
         </div>
 
-        {/* Input */}
-        <div className="px-6 py-4 border-t border-white/5 flex-shrink-0">
-          <div className="flex gap-3 items-end">
-            <div className="flex-1 relative">
-              <input ref={inputRef} className="inp pr-12 py-3" value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-                placeholder="Ask for video ideas, hooks, titles, content strategies..."
-                disabled={loading} />
-              <button onClick={() => send()} disabled={!input.trim() || loading}
-                className="absolute right-3 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg
-                          bg-cyan/20 hover:bg-cyan/30 flex items-center justify-center
-                          text-cyan transition-all disabled:opacity-30">
-                {loading ? <Spinner size={12} /> : <FiSend size={12} />}
-              </button>
-            </div>
+        {/* Input area — Claude-style */}
+        <div className={`px-4 pb-5 pt-3 border-t ${t.border} flex-shrink-0 max-w-4xl mx-auto w-full`}
+          style={{ background: theme === 'light' ? 'white' : theme === 'red' ? 'rgba(13,0,0,0.95)' : 'rgba(8,8,16,0.95)' }}>
+          <div className={`flex items-end gap-3 p-3 rounded-2xl border ${t.border}`}
+            style={{ background: theme === 'light' ? '#f9fafb' : theme === 'red' ? 'rgba(26,0,0,0.8)' : 'rgba(20,20,40,0.8)' }}>
+            <input ref={inputRef}
+              className={`flex-1 bg-transparent outline-none text-sm resize-none py-1 ${t.text}`}
+              style={{ caretColor: theme === 'red' ? '#ef4444' : theme === 'light' ? '#3b82f6' : '#00f5ff' }}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
+              placeholder="Ask about video ideas, content strategy, titles, hooks..."
+              disabled={loading} />
+            <button onClick={() => send()} disabled={!input.trim() || loading}
+              className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-all disabled:opacity-30
+                ${theme === 'red'
+                  ? 'bg-red-700 hover:bg-red-600 text-white'
+                  : theme === 'light'
+                  ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                  : 'bg-cyan/20 hover:bg-cyan/30 text-cyan border border-cyan/30'
+                }`}>
+              {loading ? <Spinner size={14} /> : <FiSend size={14} />}
+            </button>
           </div>
-          <p className="text-[10px] text-muted mt-2 text-center">
-            Press Enter to send · Click ↗ on any idea to open in AI Tools
+          <p className={`text-[10px] ${t.muted} text-center mt-2`}>
+            Press Enter to send · ↗ to use any idea in AI Tools
           </p>
         </div>
+
       </div>
     </DashboardLayout>
   )
