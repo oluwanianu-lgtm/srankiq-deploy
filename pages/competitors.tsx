@@ -1,4 +1,4 @@
-// pages/3-competitors.tsx  (replace competitors.tsx)
+// pages/4-competitors.tsx  →  copy to competitors.tsx
 import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import DashboardLayout from '../components/layout/DashboardLayout'
@@ -17,13 +17,13 @@ import {
   FiCalendar, FiCheck, FiZap
 } from 'react-icons/fi'
 
+// ── Helpers ───────────────────────────────────────────────────────
 function formatNum(n: number): string {
   if (n >= 1_000_000_000) return `${(n/1e9).toFixed(1)}B`
   if (n >= 1_000_000) return `${(n/1e6).toFixed(1)}M`
   if (n >= 1_000) return `${(n/1e3).toFixed(1)}K`
   return `${n}`
 }
-
 function formatDate(iso: string): string {
   const d = new Date(iso)
   const diff = Math.floor((Date.now() - d.getTime()) / 86400000)
@@ -33,7 +33,16 @@ function formatDate(iso: string): string {
   if (diff < 30) return `${Math.floor(diff/7)}w ago`
   return `${Math.floor(diff/30)}mo ago`
 }
+function filterByDate(videos: any[], range: string): any[] {
+  if (range === 'all' || !videos?.length) return videos
+  const cutoffs: Record<string,number> = { today: 86400000, week: 7*86400000, month: 30*86400000 }
+  const cutoff = cutoffs[range]
+  if (!cutoff) return videos
+  const filtered = videos.filter(v => (Date.now() - new Date(v.publishedAt).getTime()) <= cutoff)
+  return filtered.length > 0 ? filtered : videos
+}
 
+// ── SEO Badge ─────────────────────────────────────────────────────
 function SEOBadge({ score }: { score: number }) {
   const color = score >= 75 ? '#00ff88' : score >= 50 ? '#ffc740' : '#ff0090'
   const label = score >= 75 ? 'Great' : score >= 50 ? 'Good' : 'Needs Work'
@@ -46,8 +55,7 @@ function SEOBadge({ score }: { score: number }) {
   )
 }
 
-// ── Vertical Laser Scanner ────────────────────────────────────────
-// Scans from top to bottom of the channel panel, repeating each phase
+// ── Clone Phases ──────────────────────────────────────────────────
 const CLONE_PHASES = [
   'Analyzing content strategy...',
   'Extracting ranking keywords...',
@@ -57,66 +65,41 @@ const CLONE_PHASES = [
   'Finalizing clone package...',
 ]
 
-function VerticalLaserScanner({ phase, containerHeight }: { phase: number; containerHeight: number }) {
-  return (
-    <>
-      {/* Vertical laser line sweeping top → bottom */}
-      <motion.div
-        key={`laser-${phase}`}
-        className="absolute left-0 right-0 z-20 pointer-events-none"
-        style={{ height: '3px' }}
-        initial={{ top: 0, opacity: 0 }}
-        animate={{ top: containerHeight || 400, opacity: [0, 1, 1, 1, 0] }}
-        transition={{ duration: 1.4, ease: 'easeInOut' }}
-      >
-        {/* The laser beam */}
-        <div className="w-full h-full bg-gradient-to-r from-transparent via-cyan to-transparent" />
-        {/* Glow below the line */}
-        <div className="w-full h-8 bg-gradient-to-b from-cyan/20 to-transparent -mt-0 pointer-events-none" />
-      </motion.div>
-
-      {/* Scanning overlay that follows */}
-      <motion.div
-        key={`overlay-${phase}`}
-        className="absolute left-0 right-0 z-10 pointer-events-none"
-        style={{ height: '60px' }}
-        initial={{ top: -60, opacity: 0 }}
-        animate={{ top: containerHeight || 400, opacity: [0, 0.3, 0.3, 0] }}
-        transition={{ duration: 1.4, ease: 'easeInOut' }}
-      >
-        <div className="w-full h-full bg-gradient-to-b from-cyan/10 to-transparent" />
-      </motion.div>
-    </>
-  )
-}
-
-function CloneOverlay({ phase, isCloning, containerRef }: {
-  phase: number; isCloning: boolean; containerRef: React.RefObject<HTMLDivElement>
+// ── Vertical Laser Scanner ────────────────────────────────────────
+function LaserScanOverlay({ phase, isCloning, targetRef }: {
+  phase: number; isCloning: boolean; targetRef: React.RefObject<HTMLDivElement>
 }) {
-  const [height, setHeight] = useState(400)
-
+  const [height, setHeight] = useState(300)
   useEffect(() => {
-    if (containerRef.current) {
-      setHeight(containerRef.current.offsetHeight)
-    }
-  }, [containerRef, isCloning])
+    if (targetRef.current) setHeight(targetRef.current.offsetHeight)
+  }, [isCloning])
 
   if (!isCloning) return null
 
   return (
-    <div className="absolute inset-0 z-10 rounded-xl overflow-hidden pointer-events-none"
-      style={{ border: '1px solid rgba(0,245,255,0.3)' }}>
+    <div className="absolute inset-0 z-20 rounded-xl overflow-hidden pointer-events-none"
+      style={{ border: '1.5px solid rgba(0,245,255,0.4)', boxShadow: '0 0 20px rgba(0,245,255,0.1)' }}>
       {/* Dark tint */}
-      <div className="absolute inset-0 bg-black/40" />
-      {/* Vertical scanner */}
-      <VerticalLaserScanner phase={phase} containerHeight={height} />
-      {/* Phase label */}
+      <div className="absolute inset-0 bg-black/50 rounded-xl" />
+
+      {/* Laser beam sweeping top to bottom */}
+      <motion.div
+        key={`beam-${phase}`}
+        className="absolute left-0 right-0 pointer-events-none"
+        style={{ height: 4 }}
+        initial={{ top: 0, opacity: 0 }}
+        animate={{ top: height, opacity: [0, 1, 1, 1, 0] }}
+        transition={{ duration: 1.3, ease: 'easeInOut' }}>
+        <div className="w-full h-full bg-gradient-to-r from-transparent via-cyan to-transparent" />
+        <div className="w-full h-10 bg-gradient-to-b from-cyan/25 to-transparent" />
+      </motion.div>
+
+      {/* Phase info at bottom */}
       <div className="absolute bottom-4 left-0 right-0 flex flex-col items-center gap-2 z-30">
-        <div className="bg-black/80 backdrop-blur-sm rounded-full px-4 py-2 flex items-center gap-2">
-          <FiZap size={12} className="text-cyan animate-pulse" />
-          <span className="text-xs font-bold text-cyan">{CLONE_PHASES[phase] || 'Processing...'}</span>
+        <div className="bg-black/85 backdrop-blur-sm rounded-full px-4 py-1.5 flex items-center gap-2 border border-cyan/20">
+          <FiZap size={11} className="text-cyan animate-pulse" />
+          <span className="text-xs font-semibold text-cyan">{CLONE_PHASES[phase] || 'Processing...'}</span>
         </div>
-        {/* Dots */}
         <div className="flex gap-1.5">
           {CLONE_PHASES.map((_, i) => (
             <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
@@ -135,29 +118,33 @@ function CloneSuccessModal({ channelName, onCheck, onClose }: {
 }) {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.8, opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+      <motion.div initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.85, opacity: 0 }}
         className="bg-surf border border-white/10 rounded-2xl p-8 max-w-md w-full text-center shadow-2xl">
         <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}
-          transition={{ type: 'spring', delay: 0.2 }}
+          transition={{ type: 'spring', delay: 0.15 }}
           className="w-20 h-20 rounded-full bg-green/20 border-4 border-green flex items-center justify-center mx-auto mb-5">
           <FiCheck size={36} className="text-green" />
         </motion.div>
         <h2 className="text-2xl font-bold text-white mb-2">Channel Cloned! 🎉</h2>
         <p className="text-muted text-sm mb-2">
-          Blueprint for <span className="text-cyan font-semibold">{channelName}</span> is ready.
+          Full blueprint for <span className="text-cyan font-semibold">{channelName}</span> is ready.
         </p>
-        <div className="text-xs text-muted mb-6 p-3 bg-surf2 rounded-xl border border-white/5">
-          <div className="text-white font-semibold mb-1">Blueprint includes:</div>
-          Channel name · Tags · Content pillars · Video formats · Upload schedule · Title formulas · Growth tips
+        <div className="text-xs text-muted mb-6 p-3 bg-surf2 rounded-xl border border-white/5 text-left space-y-0.5">
+          <div className="text-white font-semibold mb-2 text-center">Blueprint includes:</div>
+          <div>✓ Suggested channel name &amp; alternatives</div>
+          <div>✓ Channel tags &amp; description</div>
+          <div>✓ Content pillars &amp; video formats</div>
+          <div>✓ Upload schedule &amp; title formula</div>
+          <div>✓ First 5 video ideas &amp; growth tips</div>
         </div>
         <button onClick={onCheck}
-          className="btn btn-cyan w-full justify-center gap-2 mb-3 text-base py-3">
-          <FiCheck size={16} /> View Full Blueprint in Get Inspiration →
+          className="btn btn-cyan w-full justify-center gap-2 mb-3 py-3 text-sm font-bold">
+          <FiCheck size={15} /> Open in Get Inspiration →
         </button>
         <button onClick={onClose} className="text-xs text-muted hover:text-white transition-colors">
-          Stay here
+          Stay on this page
         </button>
       </motion.div>
     </motion.div>
@@ -169,7 +156,7 @@ function VideoCard({ video, index }: { video: any; index: number }) {
   const [expanded, setExpanded] = useState(false)
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.06 }}
+      transition={{ delay: index * 0.05 }}
       className="bg-surf2 rounded-xl border border-white/5 hover:border-white/10 transition-all overflow-hidden">
       <div className="flex gap-3 p-3">
         <div className="w-6 h-6 rounded-full bg-cyan/10 border border-cyan/20 flex items-center
@@ -236,7 +223,7 @@ function VideoCard({ video, index }: { video: any; index: number }) {
                 </div>
                 <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
                   <div className="h-full bg-gradient-to-r from-cyan to-green rounded-full"
-                    style={{ width: `${Math.min(100, (video.likes / Math.max(video.views, 1)) * 2000)}%` }} />
+                    style={{ width: `${Math.min(100, (video.likes / Math.max(video.views,1)) * 2000)}%` }} />
                 </div>
               </div>
               {video.tags?.length > 0 && (
@@ -261,15 +248,6 @@ const DATE_RANGES = [
   { label: 'Today', value: 'today' },
 ]
 
-function filterByDate(videos: any[], range: string): any[] {
-  if (range === 'all' || !videos?.length) return videos
-  const cutoffs: Record<string, number> = { today: 86400000, week: 7*86400000, month: 30*86400000 }
-  const cutoff = cutoffs[range]
-  if (!cutoff) return videos
-  const filtered = videos.filter(v => (Date.now() - new Date(v.publishedAt).getTime()) <= cutoff)
-  return filtered.length > 0 ? filtered : videos
-}
-
 // ── Main Page ─────────────────────────────────────────────────────
 function CompetitorsPage() {
   const { activePlatform } = usePlatform()
@@ -284,18 +262,17 @@ function CompetitorsPage() {
   const [loading, setLoading] = useState(false)
   const [analyzing, setAnalyzing] = useState('')
   const [dateRange, setDateRange] = useState('all')
-
   const [suggestions, setSuggestions] = useState<any[]>([])
   const [loadingSuggestions, setLoadingSuggestions] = useState(false)
 
-  // Clone state
+  // Clone
   const [cloning, setCloning] = useState(false)
   const [clonePhase, setClonePhase] = useState(0)
   const [cloneBlueprint, setCloneBlueprint] = useState<any>(null)
   const [showCloneSuccess, setShowCloneSuccess] = useState(false)
 
-  // Ref for the channel panel — laser scans over this
-  const channelPanelRef = useRef<HTMLDivElement>(null)
+  // The laser scans this element (the entire results column)
+  const channelCardRef = useRef<HTMLDivElement>(null)
   const resultsRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -353,25 +330,24 @@ function CompetitorsPage() {
     if (!analysis) return
     setCloning(true)
     setClonePhase(0)
-    setCloneBlueprint(null)
 
-    // Animate through phases with laser scanning the channel panel
+    // Animate through 6 phases — each triggers a new laser sweep
     for (let i = 0; i < CLONE_PHASES.length; i++) {
       setClonePhase(i)
-      await new Promise(r => setTimeout(r, 1200))
+      await new Promise(r => setTimeout(r, 1300))
     }
 
     try {
       const res = await axios.post('/api/competitors/3-clone', {
-        channelName: analysis.name, channelData: analysis,
+        channelName: analysis.name,
+        channelData: analysis,
       })
       setCloneBlueprint(res.data.blueprint)
-      await new Promise(r => setTimeout(r, 400))
       setCloning(false)
       setShowCloneSuccess(true)
-    } catch (err: any) {
+    } catch {
       setCloning(false)
-      toast.error('Clone failed. Please try again.')
+      toast.error('Clone failed. Try again.')
     }
   }
 
@@ -379,17 +355,32 @@ function CompetitorsPage() {
     if (!cloneBlueprint) return
     setShowCloneSuccess(false)
     const bp = cloneBlueprint
-    const msg = encodeURIComponent(
-      `I cloned the YouTube channel "${analysis?.name}". Here is my channel blueprint:\n\n` +
-      `Channel Name: ${bp.channelName?.primary || analysis?.name + ' Style'}\n` +
-      `Niche: ${bp.niche || 'Content creation'}\n` +
-      `Target Audience: ${bp.targetAudience || 'YouTube creators'}\n` +
-      `Upload Schedule: ${bp.uploadSchedule || '3x per week'}\n` +
-      `Channel Tags: ${bp.channelTags?.join(', ') || 'youtube, content, creator'}\n` +
-      `Video Formats: ${bp.videoFormats?.map((f: any) => f.format).join(', ') || 'tutorials, shorts'}\n` +
-      `Title Formula: ${bp.titleFormula || 'How to [achieve result] in [timeframe]'}\n\n` +
-      `Based on this blueprint, help me plan my first 30 days of content with specific video ideas and titles.`
-    )
+
+    // Build detailed message from REAL blueprint data
+    const lines = [
+      `I cloned the YouTube channel "${analysis?.name}". Here is my complete channel blueprint based on their real strategy:`,
+      ``,
+      `Channel Name: ${bp.channelName?.primary || analysis?.name + ' Style'}`,
+      `Niche: ${bp.niche || 'Content creation'}`,
+      `Target Audience: ${bp.targetAudience || 'YouTube creators'}`,
+      `Upload Schedule: ${bp.uploadSchedule || '3x per week'}`,
+      `Channel Tags: ${bp.channelTags?.join(', ') || 'youtube, content, creator'}`,
+      `Video Formats: ${bp.videoFormats?.map((f: any) => `${f.format} (${f.duration})`).join(', ') || 'tutorials, shorts'}`,
+      `Title Formula: ${bp.titleFormula || 'How to [result] in [timeframe]'}`,
+      ``,
+      `Content Pillars:`,
+      ...(bp.contentPillars || []).map((p: any) => `- ${p.title}: ${p.description} (${p.frequency})`),
+      ``,
+      `First 5 Video Ideas:`,
+      ...(bp.firstVideoIdeas || []).map((idea: string, i: number) => `${i+1}. ${idea}`),
+      ``,
+      `Growth Tips:`,
+      ...(bp.growthTips || []).map((tip: string) => `- ${tip}`),
+      ``,
+      `Based on this real blueprint, help me plan my first 30 days of content with specific video titles, posting days, and thumbnail tips.`,
+    ]
+
+    const msg = encodeURIComponent(lines.join('\n'))
     router.push(`/inspiration?msg=${msg}`)
   }
 
@@ -418,14 +409,12 @@ function CompetitorsPage() {
           )}
         </AnimatePresence>
 
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-xl font-bold">👥 Competitor Intelligence</h1>
-            <p className="text-muted text-sm">Real YouTube data — stats, videos, revenue, clone strategy</p>
-          </div>
+        <div>
+          <h1 className="text-xl font-bold">👥 Competitor Intelligence</h1>
+          <p className="text-muted text-sm">Real YouTube data — stats, trending videos, revenue estimates &amp; channel cloning</p>
         </div>
 
-        {/* Search */}
+        {/* Search bar */}
         <div className="card">
           <h3 className="font-bold text-white mb-4">Analyze a Competitor</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
@@ -453,7 +442,7 @@ function CompetitorsPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Saved */}
+          {/* Saved list */}
           <div className="card lg:col-span-1 h-fit">
             <h3 className="font-bold text-white mb-3">Saved ({savedCompetitors.length})</h3>
             {savedCompetitors.length === 0 ? (
@@ -489,7 +478,7 @@ function CompetitorsPage() {
             )}
           </div>
 
-          {/* Main results */}
+          {/* Results */}
           <div className="lg:col-span-3 space-y-5" ref={resultsRef}>
 
             {loading && (
@@ -502,13 +491,12 @@ function CompetitorsPage() {
             {!loading && analysis && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
 
-                {/* Channel Header — laser scans THIS panel */}
-                <div className="relative" ref={channelPanelRef}>
-                  {/* Laser overlay — covers channel header to bottom of video list */}
-                  <CloneOverlay
+                {/* ── Channel Card with laser overlay ── */}
+                <div className="relative" ref={channelCardRef}>
+                  <LaserScanOverlay
                     phase={clonePhase}
                     isCloning={cloning}
-                    containerRef={channelPanelRef}
+                    targetRef={channelCardRef}
                   />
 
                   <div className="card">
@@ -544,6 +532,7 @@ function CompetitorsPage() {
                       </div>
                     </div>
 
+                    {/* Stats */}
                     <div className="grid grid-cols-3 md:grid-cols-6 gap-2 mb-4">
                       {[
                         { label: 'Subscribers', value: analysis.subscriberCountFormatted, color: 'text-cyan' },
@@ -560,6 +549,7 @@ function CompetitorsPage() {
                       ))}
                     </div>
 
+                    {/* SEO bar */}
                     <div className="p-3 bg-surf2 rounded-xl flex items-center gap-3">
                       <div className="text-xs text-muted whitespace-nowrap">SEO Score</div>
                       <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
@@ -574,11 +564,13 @@ function CompetitorsPage() {
                   </div>
                 </div>
 
-                {/* Trending Videos */}
+                {/* ── Trending Videos ── */}
                 {analysis.trendingVideos?.length > 0 && (
                   <div className="card">
                     <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-                      <h3 className="font-bold text-white">🔥 Top {filteredVideos.length} Videos</h3>
+                      <h3 className="font-bold text-white">
+                        🔥 Top {filteredVideos.length} Video{filteredVideos.length !== 1 ? 's' : ''}
+                      </h3>
                       <div className="flex items-center gap-1.5">
                         <FiCalendar size={12} className="text-muted" />
                         {DATE_RANGES.map(r => (
@@ -594,14 +586,14 @@ function CompetitorsPage() {
                       </div>
                     </div>
                     <div className="space-y-3">
-                      {filteredVideos.slice(0, 5).map((video: any, i: number) => (
+                      {filteredVideos.map((video: any, i: number) => (
                         <VideoCard key={video.id || i} video={video} index={i} />
                       ))}
                     </div>
                   </div>
                 )}
 
-                {/* Strategy */}
+                {/* ── Strategy + Keywords ── */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {analysis.contentStrategy && (
                     <div className="card">
@@ -625,7 +617,7 @@ function CompetitorsPage() {
                       <ul className="space-y-1.5">
                         {analysis.strengths.map((s: string, i: number) => (
                           <li key={i} className="flex items-start gap-2 text-xs text-white/70">
-                            <span className="text-green mt-0.5">→</span> {s}
+                            <span className="text-green mt-0.5 flex-shrink-0">→</span> {s}
                           </li>
                         ))}
                       </ul>
@@ -637,7 +629,7 @@ function CompetitorsPage() {
                       <ul className="space-y-1.5">
                         {analysis.opportunities.map((o: string, i: number) => (
                           <li key={i} className="flex items-start gap-2 text-xs text-white/70">
-                            <span className="text-cyan mt-0.5">→</span> {o}
+                            <span className="text-cyan mt-0.5 flex-shrink-0">→</span> {o}
                           </li>
                         ))}
                       </ul>
@@ -645,7 +637,7 @@ function CompetitorsPage() {
                   )}
                 </div>
 
-                {/* Similar Channels */}
+                {/* ── Similar Channels ── */}
                 <div className="card">
                   <div className="flex items-center gap-3 mb-4">
                     <h3 className="font-bold text-white">🤝 Similar Channels to Track</h3>
@@ -659,7 +651,7 @@ function CompetitorsPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {suggestions.map((ch: any, i: number) => {
                         const name = typeof ch === 'string' ? ch : ch.name
-                        const thumbnail = typeof ch === 'object' ? ch.thumbnail : null
+                        const thumb = typeof ch === 'object' ? ch.thumbnail : null
                         const subs = typeof ch === 'object' ? ch.subscriberCount : 0
                         const vids = typeof ch === 'object' ? ch.videoCount : 0
                         return (
@@ -670,9 +662,8 @@ function CompetitorsPage() {
                             className="flex items-center gap-3 p-3 bg-surf2 rounded-xl border border-white/5
                                       hover:border-cyan/20 hover:bg-cyan/5 transition-all text-left group">
                             <div className="relative flex-shrink-0">
-                              {thumbnail ? (
-                                <img src={thumbnail} alt={name}
-                                  className="w-10 h-10 rounded-full object-cover border border-white/10" />
+                              {thumb ? (
+                                <img src={thumb} alt={name} className="w-10 h-10 rounded-full object-cover border border-white/10" />
                               ) : (
                                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan/20 to-magenta/20
                                               flex items-center justify-center text-white font-bold text-sm">
@@ -701,7 +692,7 @@ function CompetitorsPage() {
                     </div>
                   ) : (
                     <p className="text-muted text-sm text-center py-4">
-                      No similar channels found yet. Try analyzing a different channel.
+                      No similar channels found. Try analyzing a more popular channel.
                     </p>
                   )}
                 </div>
@@ -711,7 +702,7 @@ function CompetitorsPage() {
 
             {!loading && !analysis && (
               <EmptyState icon="👥" title="Search for a competitor"
-                description="Enter any YouTube channel name to get real stats, trending videos, SEO scores, and clone their strategy" />
+                description="Enter any YouTube channel name — get real stats, top videos, SEO score, revenue estimates, and clone their entire strategy" />
             )}
           </div>
         </div>
