@@ -1,5 +1,5 @@
 // pages/competitors.tsx
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import DashboardLayout from '../components/layout/DashboardLayout'
 import { withAuth } from '../lib/withAuth'
@@ -12,13 +12,14 @@ import { saveCompetitor, getCompetitors, deleteCompetitor } from '../services/fi
 import {
   FiPlus, FiTrash2, FiRefreshCw, FiSearch, FiYoutube,
   FiUsers, FiEye, FiThumbsUp, FiMessageSquare, FiTrendingUp,
-  FiDollarSign, FiExternalLink, FiBarChart2, FiChevronDown, FiChevronUp
+  FiDollarSign, FiExternalLink, FiBarChart2, FiChevronDown, FiChevronUp,
+  FiCalendar
 } from 'react-icons/fi'
 
 function formatNum(n: number): string {
-  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
+  if (n >= 1_000_000_000) return `${(n/1e9).toFixed(1)}B`
+  if (n >= 1_000_000) return `${(n/1e6).toFixed(1)}M`
+  if (n >= 1_000) return `${(n/1e3).toFixed(1)}K`
   return `${n}`
 }
 
@@ -27,143 +28,112 @@ function formatDate(iso: string): string {
   const diff = Math.floor((Date.now() - d.getTime()) / 86400000)
   if (diff === 0) return 'Today'
   if (diff === 1) return 'Yesterday'
-  if (diff < 7) return `${diff} days ago`
-  if (diff < 30) return `${Math.floor(diff / 7)}w ago`
-  return `${Math.floor(diff / 30)}mo ago`
+  if (diff < 7) return `${diff}d ago`
+  if (diff < 30) return `${Math.floor(diff/7)}w ago`
+  return `${Math.floor(diff/30)}mo ago`
 }
 
 function SEOBadge({ score }: { score: number }) {
   const color = score >= 75 ? '#00ff88' : score >= 50 ? '#ffc740' : '#ff0090'
   const label = score >= 75 ? 'Great' : score >= 50 ? 'Good' : 'Needs Work'
   return (
-    <div className="flex items-center gap-2">
-      <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2"
-        style={{ borderColor: color, color }}>
-        {score}
-      </div>
-      <span className="text-xs" style={{ color }}>{label}</span>
+    <div className="flex items-center gap-1.5">
+      <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold border-2 flex-shrink-0"
+        style={{ borderColor: color, color }}>{score}</div>
+      <span className="text-[10px]" style={{ color }}>{label}</span>
     </div>
   )
 }
 
 function VideoCard({ video, index }: { video: any; index: number }) {
   const [expanded, setExpanded] = useState(false)
-
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.07 }}
+      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.06 }}
       className="bg-surf2 rounded-xl border border-white/5 hover:border-white/10 transition-all overflow-hidden">
 
-      <div className="flex gap-4 p-4">
+      <div className="flex gap-3 p-3">
         {/* Rank */}
         <div className="w-6 h-6 rounded-full bg-cyan/10 border border-cyan/20 flex items-center
-                       justify-center text-xs font-bold text-cyan flex-shrink-0 mt-1">
-          {index + 1}
-        </div>
+                       justify-center text-xs font-bold text-cyan flex-shrink-0 mt-1">{index + 1}</div>
 
         {/* Thumbnail */}
-        <div className="relative flex-shrink-0 w-36 h-20 rounded-lg overflow-hidden bg-black/30">
-          <img src={video.thumbnail} alt={video.title}
-            className="w-full h-full object-cover" />
-          {video.duration && (
-            <span className="absolute bottom-1 right-1 bg-black/80 text-white text-[10px]
-                           px-1.5 py-0.5 rounded font-mono">{video.duration}</span>
+        <div className="relative flex-shrink-0 w-32 h-[72px] rounded-lg overflow-hidden bg-black/30">
+          {video.thumbnail && (
+            <img src={video.thumbnail} alt={video.title} className="w-full h-full object-cover" />
           )}
-          <div className="absolute top-1 left-1">
-            <span className="text-[9px] bg-black/70 text-white px-1.5 py-0.5 rounded">
-              {formatDate(video.publishedAt)}
+          {video.duration && (
+            <span className="absolute bottom-1 right-1 bg-black/80 text-white text-[9px] px-1 py-0.5 rounded font-mono">
+              {video.duration}
             </span>
-          </div>
+          )}
+          <span className="absolute top-1 left-1 text-[8px] bg-black/70 text-white px-1 py-0.5 rounded">
+            {formatDate(video.publishedAt)}
+          </span>
         </div>
 
         {/* Info */}
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-semibold text-white line-clamp-2 mb-2 leading-snug">
-            {video.title}
-          </div>
-          {/* Stats row */}
-          <div className="grid grid-cols-3 gap-2 mb-2">
-            <div className="text-center p-1.5 bg-surf3 rounded-lg">
-              <div className="text-sm font-bold text-cyan">{video.viewsFormatted}</div>
-              <div className="text-[9px] text-muted">Views</div>
+          <div className="text-sm font-semibold text-white line-clamp-2 mb-1.5 leading-snug">{video.title}</div>
+          <div className="grid grid-cols-3 gap-1.5 mb-1.5">
+            <div className="text-center p-1 bg-surf3 rounded-lg">
+              <div className="text-xs font-bold text-cyan">{video.viewsFormatted}</div>
+              <div className="text-[8px] text-muted">Views</div>
             </div>
-            <div className="text-center p-1.5 bg-surf3 rounded-lg">
-              <div className="text-sm font-bold text-green">{video.likesFormatted}</div>
-              <div className="text-[9px] text-muted">Likes</div>
+            <div className="text-center p-1 bg-surf3 rounded-lg">
+              <div className="text-xs font-bold text-green">{video.likesFormatted}</div>
+              <div className="text-[8px] text-muted">Likes</div>
             </div>
-            <div className="text-center p-1.5 bg-surf3 rounded-lg">
-              <div className="text-sm font-bold text-gold">{video.commentsFormatted}</div>
-              <div className="text-[9px] text-muted">Comments</div>
+            <div className="text-center p-1 bg-surf3 rounded-lg">
+              <div className="text-xs font-bold text-gold">{video.commentsFormatted}</div>
+              <div className="text-[8px] text-muted">Comments</div>
             </div>
           </div>
           <SEOBadge score={video.seoScore} />
         </div>
 
         {/* Actions */}
-        <div className="flex flex-col gap-2 flex-shrink-0 items-end">
+        <div className="flex flex-col gap-1.5 flex-shrink-0 items-end justify-center">
           <a href={video.url} target="_blank" rel="noopener noreferrer">
-            <button className="btn btn-ghost btn-sm gap-1 text-xs">
-              <FiExternalLink size={11} /> Watch
+            <button className="btn btn-ghost btn-sm gap-1 text-xs py-1">
+              <FiExternalLink size={10} /> Watch
             </button>
           </a>
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="btn btn-cyan btn-sm gap-1 text-xs">
-            <FiBarChart2 size={11} />
+          <button onClick={() => setExpanded(!expanded)}
+            className="btn btn-cyan btn-sm gap-1 text-xs py-1">
+            <FiBarChart2 size={10} />
             {expanded ? 'Hide' : 'Analyze'}
-            {expanded ? <FiChevronUp size={10} /> : <FiChevronDown size={10} />}
+            {expanded ? <FiChevronUp size={9} /> : <FiChevronDown size={9} />}
           </button>
         </div>
       </div>
 
-      {/* Expanded analysis */}
+      {/* Expanded */}
       <AnimatePresence>
         {expanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden">
-            <div className="px-4 pb-4 pt-0 border-t border-white/5">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
-                <div className="p-3 bg-surf3 rounded-xl text-center">
-                  <div className="w-7 h-7 rounded-full bg-cyan/10 flex items-center justify-center mx-auto mb-1">
-                    <FiThumbsUp size={13} className="text-cyan" />
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
+            <div className="px-3 pb-3 border-t border-white/5">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3">
+                {[
+                  { icon: <FiThumbsUp size={12} className="text-cyan" />, val: video.likesFormatted, label: 'Likes', color: 'text-cyan', bg: 'bg-cyan/10' },
+                  { icon: <FiUsers size={12} className="text-green" />, val: video.estimatedSubsGained, label: 'Est. Subs Gained', color: 'text-green', bg: 'bg-green/10' },
+                  { icon: <FiDollarSign size={12} className="text-gold" />, val: video.estimatedRevenue, label: 'Est. Revenue', color: 'text-gold', bg: 'bg-gold/10' },
+                  { icon: <FiMessageSquare size={12} className="text-magenta" />, val: video.commentsFormatted, label: 'Comments', color: 'text-magenta', bg: 'bg-magenta/10' },
+                ].map(s => (
+                  <div key={s.label} className="p-2.5 bg-surf3 rounded-xl text-center">
+                    <div className={`w-6 h-6 rounded-full ${s.bg} flex items-center justify-center mx-auto mb-1`}>{s.icon}</div>
+                    <div className={`text-sm font-bold ${s.color}`}>{s.val}</div>
+                    <div className="text-[9px] text-muted">{s.label}</div>
                   </div>
-                  <div className="text-base font-bold text-cyan">{video.likesFormatted}</div>
-                  <div className="text-[10px] text-muted">Likes on video</div>
-                </div>
-                <div className="p-3 bg-surf3 rounded-xl text-center">
-                  <div className="w-7 h-7 rounded-full bg-green/10 flex items-center justify-center mx-auto mb-1">
-                    <FiUsers size={13} className="text-green" />
-                  </div>
-                  <div className="text-base font-bold text-green">{video.estimatedSubsGained}</div>
-                  <div className="text-[10px] text-muted">Est. subs gained</div>
-                </div>
-                <div className="p-3 bg-surf3 rounded-xl text-center">
-                  <div className="w-7 h-7 rounded-full bg-gold/10 flex items-center justify-center mx-auto mb-1">
-                    <FiDollarSign size={13} className="text-gold" />
-                  </div>
-                  <div className="text-base font-bold text-gold">{video.estimatedRevenue}</div>
-                  <div className="text-[10px] text-muted">Est. revenue</div>
-                </div>
-                <div className="p-3 bg-surf3 rounded-xl text-center">
-                  <div className="w-7 h-7 rounded-full bg-magenta/10 flex items-center justify-center mx-auto mb-1">
-                    <FiMessageSquare size={13} className="text-magenta" />
-                  </div>
-                  <div className="text-base font-bold text-magenta">{video.commentsFormatted}</div>
-                  <div className="text-[10px] text-muted">Comments</div>
-                </div>
+                ))}
               </div>
-
-              {/* Engagement rate */}
-              <div className="mt-3 p-3 bg-surf3 rounded-xl">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs text-muted">Engagement Rate</span>
-                  <span className="text-xs font-bold text-cyan">
+              {/* Engagement bar */}
+              <div className="mt-2 p-2.5 bg-surf3 rounded-xl">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] text-muted">Engagement Rate</span>
+                  <span className="text-[10px] font-bold text-cyan">
                     {video.views > 0 ? ((video.likes / video.views) * 100).toFixed(2) : 0}%
                   </span>
                 </div>
@@ -172,17 +142,11 @@ function VideoCard({ video, index }: { video: any; index: number }) {
                     style={{ width: `${Math.min(100, (video.likes / Math.max(video.views, 1)) * 2000)}%` }} />
                 </div>
               </div>
-
-              {/* Tags */}
               {video.tags?.length > 0 && (
-                <div className="mt-3">
-                  <div className="text-xs text-muted mb-1.5">Top Tags</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {video.tags.map((tag: string, i: number) => (
-                      <span key={i} className="text-[10px] px-2 py-1 bg-surf3 border border-white/10
-                                              rounded-full text-muted">{tag}</span>
-                    ))}
-                  </div>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {video.tags.map((tag: string, i: number) => (
+                    <span key={i} className="text-[9px] px-1.5 py-0.5 bg-surf3 border border-white/10 rounded-full text-muted">{tag}</span>
+                  ))}
                 </div>
               )}
             </div>
@@ -193,10 +157,33 @@ function VideoCard({ video, index }: { video: any; index: number }) {
   )
 }
 
+const DATE_RANGES = [
+  { label: 'All Time', value: 'all' },
+  { label: 'This Month', value: 'month' },
+  { label: 'This Week', value: 'week' },
+  { label: 'Today', value: 'today' },
+]
+
+// Filter videos by date range
+function filterByDate(videos: any[], range: string): any[] {
+  if (range === 'all' || !videos?.length) return videos
+  const now = Date.now()
+  const cutoffs: Record<string, number> = {
+    today: 86400000,
+    week: 7 * 86400000,
+    month: 30 * 86400000,
+  }
+  const cutoff = cutoffs[range]
+  if (!cutoff) return videos
+  const filtered = videos.filter(v => (now - new Date(v.publishedAt).getTime()) <= cutoff)
+  return filtered.length > 0 ? filtered : videos // fallback to all if none match
+}
+
 function CompetitorsPage() {
-  const { activePlatform } = usePlatform()
+  const { activePlatform, platformData } = usePlatform()
   const { user } = useAuth()
   const activePlt = PLATFORMS.find(p => p.code === activePlatform)!
+  const bottomRef = useRef<HTMLDivElement>(null)
 
   const [savedCompetitors, setSavedCompetitors] = useState<any[]>([])
   const [newName, setNewName] = useState('')
@@ -204,10 +191,11 @@ function CompetitorsPage() {
   const [analysis, setAnalysis] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [analyzing, setAnalyzing] = useState('')
+  const [dateRange, setDateRange] = useState('all')
+  const [suggestions, setSuggestions] = useState<string[]>([])
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false)
 
-  useEffect(() => {
-    if (user) loadSaved()
-  }, [user])
+  useEffect(() => { if (user) loadSaved() }, [user])
 
   const loadSaved = async () => {
     if (!user) return
@@ -219,6 +207,7 @@ function CompetitorsPage() {
     setAnalyzing(name)
     setLoading(true)
     setAnalysis(null)
+    setSuggestions([])
     try {
       const res = await axios.post('/api/competitors/analyze', {
         channelName: name,
@@ -229,8 +218,12 @@ function CompetitorsPage() {
       if (save && user) {
         await saveCompetitor(user.uid, { name, platform: activePlt.name, data: res.data })
         await loadSaved()
-        toast.success(`${name} added to saved competitors`)
+        toast.success(`${name} saved`)
       }
+      // Scroll to results
+      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300)
+      // Load suggested competitors based on this channel's niche/keywords
+      loadSuggestions(res.data)
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Analysis failed. Try again.')
     } finally {
@@ -239,25 +232,45 @@ function CompetitorsPage() {
     }
   }
 
+  const loadSuggestions = async (data: any) => {
+    setLoadingSuggestions(true)
+    try {
+      const keywords = data.rankingKeywords?.slice(0, 3).join(', ') || data.name
+      const res = await axios.post('/api/competitors/suggestions', {
+        channelName: data.name,
+        keywords,
+        niche: niche || 'general',
+        excludeId: data.channelId,
+      })
+      setSuggestions(res.data.suggestions || [])
+    } catch { /* silent */ } finally {
+      setLoadingSuggestions(false)
+    }
+  }
+
   const remove = async (id: string) => {
     if (!user) return
     await deleteCompetitor(user.uid, id)
     await loadSaved()
-    toast.success('Competitor removed')
+    toast.success('Removed')
   }
+
+  const filteredVideos = analysis?.trendingVideos
+    ? filterByDate(analysis.trendingVideos, dateRange)
+    : []
 
   return (
     <DashboardLayout title="Competitors">
       <div className="p-6 space-y-6">
+
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-xl font-bold">👥 Competitor Intelligence</h1>
-            <p className="text-muted text-sm">Real YouTube data — channel stats, trending videos, revenue estimates</p>
+            <p className="text-muted text-sm">Real YouTube data — channel stats, trending videos, revenue</p>
           </div>
-          <span className="badge-cyan text-[10px]">YouTube API</span>
         </div>
 
-        {/* Add competitor */}
+        {/* Search */}
         <div className="card">
           <h3 className="font-bold text-white mb-4">Analyze a Competitor</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
@@ -268,7 +281,7 @@ function CompetitorsPage() {
                 <input className="inp pl-9" value={newName}
                   onChange={e => setNewName(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' && newName) { analyze(newName); setNewName('') } }}
-                  placeholder="e.g. MrBeast, MKBHD, Gary Vee..." />
+                  placeholder="e.g. MrBeast, MKBHD, @veritasium..." />
               </div>
             </div>
             <div>
@@ -277,10 +290,8 @@ function CompetitorsPage() {
                 placeholder="e.g. tech, finance, fitness" />
             </div>
           </div>
-          <button
-            onClick={() => { if (newName) { analyze(newName); setNewName('') } else toast.error('Enter a channel name') }}
-            disabled={loading}
-            className="btn btn-cyan gap-2">
+          <button onClick={() => { if (newName) { analyze(newName); setNewName('') } else toast.error('Enter a channel name') }}
+            disabled={loading} className="btn btn-cyan gap-2">
             {loading ? <Spinner size={15} /> : <FiPlus size={15} />}
             {loading ? 'Analyzing...' : 'Analyze Competitor'}
           </button>
@@ -288,20 +299,20 @@ function CompetitorsPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Saved list */}
-          <div className="card lg:col-span-1">
-            <h3 className="font-bold text-white mb-4">Saved ({savedCompetitors.length})</h3>
+          <div className="card lg:col-span-1 h-fit">
+            <h3 className="font-bold text-white mb-3">Saved ({savedCompetitors.length})</h3>
             {savedCompetitors.length === 0 ? (
-              <p className="text-muted text-sm text-center py-8">No competitors saved yet</p>
+              <p className="text-muted text-sm text-center py-6">No competitors saved yet</p>
             ) : (
               <div className="space-y-2">
                 {savedCompetitors.map((c: any) => (
                   <div key={c.id}
-                    className="flex items-center gap-2 p-2.5 bg-surf2 rounded-xl
-                              border border-white/5 hover:border-white/10 transition-colors cursor-pointer"
+                    className="flex items-center gap-2 p-2.5 bg-surf2 rounded-xl border border-white/5
+                              hover:border-white/10 transition-colors cursor-pointer"
                     onClick={() => analyze(c.name, false)}>
                     <div className="w-7 h-7 rounded-full bg-gradient-to-br from-cyan/20 to-magenta/20
                                   flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
-                      {c.name?.charAt(0)}
+                      {c.name?.charAt(0)?.toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-xs font-semibold text-white truncate">{c.name}</div>
@@ -323,13 +334,13 @@ function CompetitorsPage() {
             )}
           </div>
 
-          {/* Main analysis panel */}
-          <div className="lg:col-span-3">
+          {/* Main results */}
+          <div className="lg:col-span-3 space-y-5" ref={bottomRef}>
+
             {loading && (
               <div className="card flex flex-col items-center justify-center py-20">
                 <div className="loading-dots flex justify-center mb-4"><span /><span /><span /></div>
                 <p className="text-muted text-sm">Fetching real YouTube data for {analyzing}...</p>
-                <p className="text-xs text-muted/50 mt-1">Getting channel stats, top videos, and engagement</p>
               </div>
             )}
 
@@ -338,20 +349,20 @@ function CompetitorsPage() {
 
                 {/* Channel Header */}
                 <div className="card">
-                  <div className="flex items-center gap-4 mb-5">
+                  <div className="flex items-center gap-4 mb-4">
                     {analysis.thumbnail ? (
                       <img src={analysis.thumbnail} alt={analysis.name}
-                        className="w-16 h-16 rounded-2xl object-cover border border-white/10" />
+                        className="w-14 h-14 rounded-xl object-cover border border-white/10 flex-shrink-0" />
                     ) : (
-                      <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan/20 to-magenta/20
-                                    flex items-center justify-center text-2xl font-display text-white">
+                      <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-cyan/20 to-magenta/20
+                                    flex items-center justify-center text-2xl font-display text-white flex-shrink-0">
                         {analysis.name?.charAt(0)}
                       </div>
                     )}
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h2 className="text-xl font-bold text-white">{analysis.name}</h2>
-                        <FiYoutube className="text-red-400" size={16} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <h2 className="text-lg font-bold text-white truncate">{analysis.name}</h2>
+                        <FiYoutube className="text-red-400 flex-shrink-0" size={14} />
                       </div>
                       <a href={analysis.channelUrl} target="_blank" rel="noopener noreferrer"
                         className="text-xs text-cyan hover:underline flex items-center gap-1">
@@ -361,56 +372,72 @@ function CompetitorsPage() {
                     <AIBadge />
                   </div>
 
-                  {/* Real Stats Grid */}
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                  {/* Stats */}
+                  <div className="grid grid-cols-3 md:grid-cols-6 gap-2 mb-4">
                     {[
-                      { label: 'Subscribers', value: analysis.subscriberCountFormatted, icon: <FiUsers size={13} />, color: 'text-cyan' },
-                      { label: 'Total Views', value: analysis.totalViewsFormatted, icon: <FiEye size={13} />, color: 'text-green' },
-                      { label: 'Videos', value: analysis.videoCount, icon: <FiYoutube size={13} />, color: 'text-red-400' },
-                      { label: 'Avg Views', value: analysis.avgViewsFormatted, icon: <FiTrendingUp size={13} />, color: 'text-gold' },
-                      { label: 'New Subs (28d)', value: analysis.newSubsLast28Days, icon: <FiUsers size={13} />, color: 'text-magenta' },
-                      { label: 'Est. Revenue/mo', value: analysis.estimatedMonthlyRevenue, icon: <FiDollarSign size={13} />, color: 'text-gold' },
+                      { label: 'Subscribers', value: analysis.subscriberCountFormatted, color: 'text-cyan' },
+                      { label: 'Total Views', value: analysis.totalViewsFormatted, color: 'text-green' },
+                      { label: 'Videos', value: analysis.videoCount, color: 'text-red-400' },
+                      { label: 'Avg Views', value: analysis.avgViewsFormatted, color: 'text-gold' },
+                      { label: 'New Subs (28d)', value: analysis.newSubsLast28Days, color: 'text-magenta' },
+                      { label: 'Est. Revenue/mo', value: analysis.estimatedMonthlyRevenue, color: 'text-gold' },
                     ].map(s => (
-                      <div key={s.label} className="bg-surf2 rounded-xl p-3 text-center">
-                        <div className={`flex justify-center mb-1 ${s.color}`}>{s.icon}</div>
+                      <div key={s.label} className="bg-surf2 rounded-xl p-2.5 text-center">
                         <div className={`text-sm font-bold ${s.color}`}>{s.value || '—'}</div>
                         <div className="text-[9px] text-muted mt-0.5 leading-tight">{s.label}</div>
                       </div>
                     ))}
                   </div>
 
-                  {/* Channel SEO Score */}
-                  <div className="mt-4 p-3 bg-surf2 rounded-xl flex items-center gap-4">
-                    <div>
-                      <div className="text-xs text-muted mb-1">Channel SEO Score</div>
-                      <SEOBadge score={analysis.channelSEOScore} />
+                  {/* SEO Score bar */}
+                  <div className="p-3 bg-surf2 rounded-xl flex items-center gap-3">
+                    <div className="text-xs text-muted whitespace-nowrap">SEO Score</div>
+                    <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full bg-gradient-to-r from-cyan to-green"
+                        style={{ width: `${analysis.channelSEOScore}%` }} />
                     </div>
-                    <div className="flex-1">
-                      <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                        <div className="h-full rounded-full transition-all duration-1000 bg-gradient-to-r from-cyan to-green"
-                          style={{ width: `${analysis.channelSEOScore}%` }} />
-                      </div>
-                    </div>
-                    <div className="text-2xl font-display" style={{
+                    <SEOBadge score={analysis.channelSEOScore} />
+                    <div className="text-lg font-display font-bold flex-shrink-0" style={{
                       color: analysis.channelSEOScore >= 75 ? '#00ff88' : analysis.channelSEOScore >= 50 ? '#ffc740' : '#ff0090'
-                    }}>
-                      {analysis.channelSEOScore}/100
-                    </div>
+                    }}>{analysis.channelSEOScore}/100</div>
                   </div>
                 </div>
 
-                {/* Trending Videos */}
+                {/* ── TRENDING VIDEOS ── */}
                 {analysis.trendingVideos?.length > 0 && (
                   <div className="card">
-                    <div className="flex items-center gap-3 mb-4">
-                      <h3 className="font-bold text-white">🔥 Top {analysis.trendingVideos.length} Trending Videos</h3>
-                      <span className="badge-red text-[10px]">Real YouTube Data</span>
+                    {/* Header + date range filter */}
+                    <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+                      <h3 className="font-bold text-white flex items-center gap-2">
+                        🔥 Top {filteredVideos.length} Videos
+                      </h3>
+                      {/* Date range pills */}
+                      <div className="flex items-center gap-1.5">
+                        <FiCalendar size={12} className="text-muted" />
+                        {DATE_RANGES.map(r => (
+                          <button key={r.value} onClick={() => setDateRange(r.value)}
+                            className={`text-[10px] px-2.5 py-1 rounded-full font-semibold transition-all border ${
+                              dateRange === r.value
+                                ? 'bg-cyan/20 text-cyan border-cyan/40'
+                                : 'bg-white/5 text-muted border-white/10 hover:border-white/20 hover:text-white'
+                            }`}>
+                            {r.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
+
                     <div className="space-y-3">
-                      {analysis.trendingVideos.map((video: any, i: number) => (
-                        <VideoCard key={video.id} video={video} index={i} />
+                      {filteredVideos.slice(0, 5).map((video: any, i: number) => (
+                        <VideoCard key={video.id || i} video={video} index={i} />
                       ))}
                     </div>
+
+                    {dateRange !== 'all' && filteredVideos.length === 0 && (
+                      <p className="text-center text-muted text-sm py-6">
+                        No videos found in this time range. Showing all-time top videos instead.
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -418,25 +445,20 @@ function CompetitorsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {analysis.contentStrategy && (
                     <div className="card">
-                      <h4 className="font-bold text-white mb-3 text-sm flex items-center gap-2">
-                        📋 Content Strategy <AIBadge />
-                      </h4>
+                      <h4 className="font-bold text-white mb-3 text-sm flex items-center gap-2">📋 Content Strategy <AIBadge /></h4>
                       <p className="text-sm text-white/70 leading-relaxed">{analysis.contentStrategy}</p>
                     </div>
                   )}
-
                   {analysis.rankingKeywords?.length > 0 && (
                     <div className="card">
                       <h4 className="font-bold text-white mb-3 text-sm">🔑 Ranking Keywords</h4>
                       <div className="flex flex-wrap gap-1.5">
                         {analysis.rankingKeywords.map((kw: string, i: number) => (
-                          <span key={i} className="px-2 py-1 bg-surf2 border border-white/10
-                                                   rounded-full text-xs text-white/70">{kw}</span>
+                          <span key={i} className="px-2 py-1 bg-surf2 border border-white/10 rounded-full text-xs text-white/70">{kw}</span>
                         ))}
                       </div>
                     </div>
                   )}
-
                   {analysis.strengths?.length > 0 && (
                     <div className="card">
                       <h4 className="font-bold text-green mb-3 text-sm">✅ Strengths</h4>
@@ -449,7 +471,6 @@ function CompetitorsPage() {
                       </ul>
                     </div>
                   )}
-
                   {analysis.opportunities?.length > 0 && (
                     <div className="card">
                       <h4 className="font-bold text-cyan mb-3 text-sm">💡 Your Opportunities</h4>
@@ -464,12 +485,52 @@ function CompetitorsPage() {
                   )}
                 </div>
 
+                {/* ── AUTO-SUGGESTED COMPETITORS ── */}
+                <div className="card">
+                  <div className="flex items-center gap-3 mb-4">
+                    <h3 className="font-bold text-white">🤝 Similar Channels You May Want to Track</h3>
+                    {loadingSuggestions && <Spinner size={13} />}
+                  </div>
+                  {suggestions.length > 0 ? (
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      {suggestions.map((name, i) => (
+                        <motion.button key={i}
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ delay: i * 0.07 }}
+                          onClick={() => analyze(name)}
+                          className="flex items-center gap-2.5 p-3 bg-surf2 rounded-xl border border-white/5
+                                    hover:border-cyan/20 hover:bg-cyan/5 transition-all text-left group">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan/20 to-magenta/20
+                                        flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                            {name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-semibold text-white truncate group-hover:text-cyan transition-colors">
+                              {name}
+                            </div>
+                            <div className="text-[10px] text-muted">Click to analyze</div>
+                          </div>
+                        </motion.button>
+                      ))}
+                    </div>
+                  ) : !loadingSuggestions ? (
+                    <p className="text-muted text-sm text-center py-4">
+                      Analyze a competitor above to see similar channel suggestions
+                    </p>
+                  ) : (
+                    <div className="flex justify-center py-6">
+                      <div className="loading-dots flex"><span /><span /><span /></div>
+                    </div>
+                  )}
+                </div>
+
               </motion.div>
             )}
 
             {!loading && !analysis && (
               <EmptyState icon="👥" title="Search for a competitor"
-                description="Enter any YouTube channel name above to get real stats, trending videos, and AI-powered analysis" />
+                description="Enter any YouTube channel name above — get real stats, trending videos, SEO scores and revenue estimates" />
             )}
           </div>
         </div>
