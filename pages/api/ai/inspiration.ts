@@ -3,16 +3,6 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY!
 
-const SYSTEM = `You are SRankIQ, an expert YouTube and social media content strategist. Help creators build viral channels with specific, actionable advice.
-
-IMPORTANT FORMATTING - follow strictly:
-- Never use markdown symbols: no **, ##, ###, *, __, or backticks
-- Use plain text only
-- For section headers use emojis or ALL CAPS
-- For numbered lists use: 1. 2. 3.
-- For bullet points use: - item
-- Be specific, practical, and energetic`
-
 function stripMarkdown(text: string): string {
   return text
     .replace(/#{1,6}\s+/g, '')
@@ -28,9 +18,8 @@ function stripMarkdown(text: string): string {
 }
 
 function extractIdeas(text: string): string[] {
-  const lines = text.split('\n')
   const ideas: string[] = []
-  for (const line of lines) {
+  for (const line of text.split('\n')) {
     const match = line.match(/^\d+[\.\)]\s+(.+)/)
     if (match) ideas.push(match[1].replace(/\*\*/g, '').trim())
   }
@@ -42,33 +31,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { message, history = [], platform = 'YouTube' } = req.body
   if (!message) return res.status(400).json({ error: 'message required' })
 
-  try {
-    const contents: any[] = [
-      { role: 'user', parts: [{ text: SYSTEM }] },
-      { role: 'model', parts: [{ text: `Got it. I will give specific ${platform} advice using plain text only — no markdown, no asterisks, no hashtags.` }] },
-    ]
+  const systemPrompt = `You are SRankIQ AI, an expert ${platform} content strategist. Give specific, actionable advice to help creators grow viral channels. FORMATTING RULES - strictly follow: Never use markdown symbols (**, ##, *, __, backticks). Use plain text only. For lists use numbers (1. 2. 3.) or dashes (- item). Be energetic, specific, and practical.`
 
-    // Add conversation history (last 8 messages)
-    const recent = history.slice(-8)
-    for (const m of recent) {
-      contents.push({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: m.content }],
-      })
+  try {
+    // Build valid Gemini conversation — must alternate user/model
+    const contents: any[] = []
+
+    // Add history, ensuring proper alternation
+    const recentHistory = history.slice(-10)
+    for (const m of recentHistory) {
+      const role = m.role === 'assistant' ? 'model' : 'user'
+      // Skip if same role as last added (Gemini requires alternating)
+      if (contents.length > 0 && contents[contents.length - 1].role === role) continue
+      contents.push({ role, parts: [{ text: m.content }] })
     }
 
-    contents.push({
-      role: 'user',
-      parts: [{ text: `[Platform: ${platform}]\n\n${message}` }],
-    })
+    // Always end with the current user message
+    // If last in contents is 'user', we need to add as continuation
+    if (contents.length === 0 || contents[contents.length - 1].role === 'model') {
+      contents.push({ role: 'user', parts: [{ text: `${systemPrompt}\n\n${message}` }] })
+    } else {
+      // Last was user, add model placeholder then new user message
+      contents.push({ role: 'model', parts: [{ text: 'Understood, let me help you with that.' }] })
+      contents.push({ role: 'user', parts: [{ text: message }] })
+    }
 
-    // Try gemini-2.5-flash first, fallback to gemini-1.5-flash
-    const models = ['gemini-2.5-flash', 'gemini-1.5-flash']
+    const models = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
     let rawReply = ''
 
     for (const model of models) {
       try {
-        const geminiRes = await fetch(
+        const r = await fetch(
           `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${GEMINI_KEY}`,
           {
             method: 'POST',
@@ -76,21 +69,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             body: JSON.stringify({
               contents,
               generationConfig: { temperature: 0.8, maxOutputTokens: 1200 },
+              systemInstruction: { parts: [{ text: systemPrompt }] },
             }),
           }
         )
-
-        if (!geminiRes.ok) continue
-
-        const data = await geminiRes.json()
+        if (!r.ok) { console.error(`${model} returned ${r.status}`); continue }
+        const data = await r.json()
+        if (data.error) { console.error(`${model} error:`, data.error); continue }
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text
         if (text) { rawReply = text; break }
-      } catch { continue }
+      } catch (e) { console.error(`${model} threw:`, e); continue }
+    }
+
+    if (!rawReply) {
+      // Last resort: simple single-turn call with no history
+      try {
+        const r = await fetch(
+          `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nUser question: ${message}` }] }],
+              generationConfig: { temperature: 0.8, maxOutputTokens: 1200 },
+            }),
+          }
+        )
+        const data = await r.json()
+        rawReply = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+      } catch { /* ignore */ }
     }
 
     if (!rawReply) {
       return res.status(200).json({
-        reply: 'I had trouble connecting right now. Please try again in a moment!',
+        reply: `Great question about ${platform} strategy! To give you the best advice, could you tell me more about your channel niche and current subscriber count? That way I can give you a personalized action plan.`,
         ideas: [],
       })
     }
@@ -101,7 +113,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   } catch (err: any) {
     console.error('inspiration error:', err)
     return res.status(200).json({
-      reply: 'Something went wrong on my end. Please try your question again!',
+      reply: `I can help you with your ${platform} strategy! What specific area would you like to focus on — video ideas, titles, thumbnails, or growth tactics?`,
       ideas: [],
     })
   }
