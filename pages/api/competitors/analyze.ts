@@ -52,57 +52,82 @@ function estimateRevenue(views: number): string {
 }
 
 async function findChannelId(name: string): Promise<string | null> {
-  // Strategy 1: search by channel type
   const clean = name.replace(/^@/, '').trim()
-  
-  // Try forHandle first (works for @handles)
   const handleRes = await fetch(
     `https://www.googleapis.com/youtube/v3/channels?part=id,snippet&forHandle=${encodeURIComponent(clean)}&key=${YT_KEY}`
   )
   const handleData = await handleRes.json()
   if (handleData.items?.[0]?.id) return handleData.items[0].id
 
-  // Try forUsername
   const userRes = await fetch(
     `https://www.googleapis.com/youtube/v3/channels?part=id,snippet&forUsername=${encodeURIComponent(clean)}&key=${YT_KEY}`
   )
   const userData = await userRes.json()
   if (userData.items?.[0]?.id) return userData.items[0].id
 
-  // Try search
   const searchRes = await fetch(
     `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(clean)}&type=channel&maxResults=3&key=${YT_KEY}`
   )
   const searchData = await searchRes.json()
-  
   if (searchData.items?.length > 0) {
-    // Pick the best match — prefer exact title match
     const exact = searchData.items.find((it: any) =>
       it.snippet?.channelTitle?.toLowerCase() === clean.toLowerCase()
     )
     const item = exact || searchData.items[0]
     return item.id?.channelId || item.snippet?.channelId || null
   }
-
   return null
+}
+
+async function fetchVideos(channelId: string, order: 'viewCount' | 'date', maxResults = 10) {
+  const searchRes = await fetch(
+    `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&type=video&order=${order}&maxResults=${maxResults}&key=${YT_KEY}`
+  )
+  const searchData = await searchRes.json()
+  const videoItems = searchData.items || []
+  if (!videoItems.length) return []
+
+  const videoIds = videoItems.map((v: any) => v.id?.videoId).filter(Boolean).join(',')
+  const statsRes = await fetch(
+    `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${videoIds}&key=${YT_KEY}`
+  )
+  const statsData = await statsRes.json()
+
+  return (statsData.items || []).map((v: any) => {
+    const views = parseInt(v.statistics?.viewCount || '0')
+    const likes = parseInt(v.statistics?.likeCount || '0')
+    const comments = parseInt(v.statistics?.commentCount || '0')
+    return {
+      id: v.id,
+      title: v.snippet?.title,
+      thumbnail: v.snippet?.thumbnails?.medium?.url || v.snippet?.thumbnails?.default?.url,
+      publishedAt: v.snippet?.publishedAt,
+      duration: parseDuration(v.contentDetails?.duration || ''),
+      views, viewsFormatted: formatNum(views),
+      likes, likesFormatted: formatNum(likes),
+      comments, commentsFormatted: formatNum(comments),
+      seoScore: calcVideoSEOScore(v),
+      estimatedRevenue: estimateRevenue(views),
+      estimatedSubsGained: formatNum(Math.round(views * 0.008)),
+      url: `https://youtube.com/watch?v=${v.id}`,
+      tags: v.snippet?.tags?.slice(0, 5) || [],
+    }
+  })
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end()
-
   const { channelName, platform, niche } = req.body
   if (!channelName) return res.status(400).json({ error: 'Channel name required' })
 
   try {
     const channelId = await findChannelId(channelName)
-
     if (!channelId) {
-      return res.status(404).json({ error: `Channel "${channelName}" not found. Try the exact channel name or @handle.` })
+      return res.status(404).json({ error: `Channel "${channelName}" not found. Try the exact name or @handle.` })
     }
 
-    // Get full channel details
     const chRes = await fetch(
-      `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,contentDetails,brandingSettings&id=${channelId}&key=${YT_KEY}`
+      `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,contentDetails&id=${channelId}&key=${YT_KEY}`
     )
     const chData = await chRes.json()
     const channel = chData.items?.[0]
@@ -114,42 +139,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const videoCount = parseInt(stats?.videoCount || '0')
     const avgViewsPerVideo = videoCount > 0 ? Math.round(totalViews / videoCount) : 0
 
-    // Get top 5 most-viewed videos
-    const videosRes = await fetch(
-      `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&type=video&order=viewCount&maxResults=5&key=${YT_KEY}`
-    )
-    const videosData = await videosRes.json()
-    const videoItems = videosData.items || []
+    // Fetch BOTH top videos (by views) AND recent videos (by date)
+    // This makes date filtering actually work client-side
+    const [topVideos, recentVideos] = await Promise.all([
+      fetchVideos(channelId, 'viewCount', 10),
+      fetchVideos(channelId, 'date', 10),
+    ])
 
-    let trendingVideos: any[] = []
-
-    if (videoItems.length > 0) {
-      const videoIds = videoItems.map((v: any) => v.id?.videoId).filter(Boolean).join(',')
-      const statsRes = await fetch(
-        `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${videoIds}&key=${YT_KEY}`
-      )
-      const statsData = await statsRes.json()
-
-      trendingVideos = (statsData.items || []).slice(0, 5).map((v: any) => {
-        const views = parseInt(v.statistics?.viewCount || '0')
-        const likes = parseInt(v.statistics?.likeCount || '0')
-        const comments = parseInt(v.statistics?.commentCount || '0')
-        return {
-          id: v.id,
-          title: v.snippet?.title,
-          thumbnail: v.snippet?.thumbnails?.medium?.url || v.snippet?.thumbnails?.default?.url,
-          publishedAt: v.snippet?.publishedAt,
-          duration: parseDuration(v.contentDetails?.duration || ''),
-          views, viewsFormatted: formatNum(views),
-          likes, likesFormatted: formatNum(likes),
-          comments, commentsFormatted: formatNum(comments),
-          seoScore: calcVideoSEOScore(v),
-          estimatedRevenue: estimateRevenue(views),
-          estimatedSubsGained: formatNum(Math.round(views * 0.008)),
-          url: `https://youtube.com/watch?v=${v.id}`,
-          tags: v.snippet?.tags?.slice(0, 5) || [],
-        }
-      })
+    // Merge deduped — recent first, then top by views
+    const seen = new Set<string>()
+    const allVideos: any[] = []
+    for (const v of [...recentVideos, ...topVideos]) {
+      if (!seen.has(v.id)) { seen.add(v.id); allVideos.push(v) }
     }
 
     // Gemini analysis
@@ -177,15 +178,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         strengths = parsed.strengths || []
         opportunities = parsed.opportunities || []
       }
-    } catch { /* optional */ }
+    } catch { }
 
-    const channelSEOScore = trendingVideos.length > 0
-      ? Math.round(trendingVideos.reduce((a, v) => a + v.seoScore, 0) / trendingVideos.length) : 65
+    const channelSEOScore = allVideos.length > 0
+      ? Math.round(allVideos.slice(0,5).reduce((a, v) => a + v.seoScore, 0) / Math.min(allVideos.length, 5)) : 65
 
     return res.status(200).json({
       name: channel.snippet?.title || channelName,
-      platform: 'YouTube',
-      channelId,
+      platform: 'YouTube', channelId,
       thumbnail: channel.snippet?.thumbnails?.medium?.url,
       channelUrl: `https://youtube.com/channel/${channelId}`,
       subscriberCount,
@@ -198,7 +198,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       channelSEOScore,
       newSubsLast28Days: estimateNewSubs(subscriberCount, avgViewsPerVideo),
       estimatedMonthlyRevenue: estimateRevenue(avgViewsPerVideo * Math.min(videoCount, 12)),
-      contentStrategy, rankingKeywords, strengths, opportunities, trendingVideos,
+      contentStrategy, rankingKeywords, strengths, opportunities,
+      trendingVideos: allVideos, // includes both recent + top
     })
   } catch (err: any) {
     console.error('competitors error:', err)
