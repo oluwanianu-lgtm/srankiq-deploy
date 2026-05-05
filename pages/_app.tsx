@@ -13,17 +13,14 @@ export default function App({ Component, pageProps }: AppProps) {
         <title>SRankIQ — Social Media Ranking Intelligence</title>
         <meta name="description" content="AI-powered YouTube growth platform. Analyze competitors, find trending keywords, clone winning channels, and grow faster." />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        {/* Favicon */}
-        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-        <link rel="alternate icon" href="/favicon.ico" />
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-        {/* Open Graph */}
-        <meta property="og:title" content="SRankIQ — Social Media Ranking Intelligence" />
-        <meta property="og:description" content="AI-powered YouTube growth platform" />
-        <meta property="og:image" content="/og-image.png" />
-        <meta property="og:type" content="website" />
-        {/* Theme color */}
-        <meta name="theme-color" content="#0d0d0d" />
+
+        {/* Favicon — ICO is the ONLY format that reliably shows in browser tabs */}
+        <link rel="shortcut icon" href="/favicon.ico" />
+        <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+
+        <meta name="theme-color" content="#0a0a12" />
       </Head>
       <AuthProvider>
         <PlatformProvider>
