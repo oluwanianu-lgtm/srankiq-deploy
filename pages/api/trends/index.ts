@@ -1,6 +1,9 @@
 // pages/api/trends/index.ts
 import type { NextApiRequest, NextApiResponse } from 'next'
 
+const GEMINI_KEY = process.env.GEMINI_API_KEY!
+
+// Correct YouTube category IDs
 const CATEGORY_MAP: Record<string, string> = {
   'Gaming': '20',
   'Music': '10',
@@ -12,14 +15,12 @@ const CATEGORY_MAP: Record<string, string> = {
   'Comedy': '23',
   'Film': '1',
   'Fashion': '26',
-  'Science': '28',
+  'Science': '28',  // Science uses Tech category (28)
   'Food': '26',
   'Travel': '19',
   'Finance': '24',
   'Fitness': '17',
 }
-
-const GEMINI_KEY = process.env.GEMINI_API_KEY!
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
@@ -30,19 +31,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (platform === 'YouTube' || !platform) {
       const ytKey = process.env.YOUTUBE_API_KEY!
 
-      // Build YouTube trending URL
-      const catId = category && category !== 'All' ? CATEGORY_MAP[category as string] : null
-      let url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&chart=mostPopular&regionCode=US&maxResults=20&key=${ytKey}`
-      if (catId) url += `&videoCategoryId=${catId}`
+      const catId = (category && category !== 'All') ? CATEGORY_MAP[category as string] : null
 
-      const ytRes = await fetch(url)
-      const ytData = await ytRes.json()
-
-      if (!ytData.items?.length) {
-        return res.status(200).json({ trends: [], summary: 'No trends found. Try a different category.' })
+      // Try with category first, fallback to no category if empty
+      const fetchTrends = async (withCategory: boolean) => {
+        let url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&chart=mostPopular&regionCode=US&maxResults=20&key=${ytKey}`
+        if (withCategory && catId) url += `&videoCategoryId=${catId}`
+        const r = await fetch(url)
+        const d = await r.json()
+        return d.items || []
       }
 
-      let items = ytData.items
+      let items = await fetchTrends(true)
+
+      // If category returned nothing, fallback to all trending
+      if (!items.length && catId) {
+        items = await fetchTrends(false)
+      }
+
+      if (!items.length) {
+        return res.status(200).json({ trends: [], summary: 'No trends found right now. Try again in a moment.' })
+      }
 
       // Filter by niche keyword if provided
       if (niche && typeof niche === 'string' && niche.trim()) {
@@ -52,6 +61,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           item.snippet?.description?.toLowerCase().includes(nicheL) ||
           (item.snippet?.tags || []).some((t: string) => t.toLowerCase().includes(nicheL))
         )
+        // Only apply niche filter if we have enough results
         if (filtered.length >= 2) items = filtered
       }
 
@@ -59,7 +69,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const views = parseInt(item.statistics?.viewCount || '0')
         const likes = parseInt(item.statistics?.likeCount || '0')
         const comments = parseInt(item.statistics?.commentCount || '0')
-        const engagement = views > 0 ? ((likes / views) * 100).toFixed(1) : '0'
         return {
           topic: item.snippet.title,
           category: item.snippet.channelTitle,
@@ -68,7 +77,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           viewCount: views,
           likes,
           comments,
-          engagement: `${engagement}%`,
+          engagement: views > 0 ? `${((likes / views) * 100).toFixed(1)}%` : '0%',
           contentIdea: `Create a video inspired by: ${item.snippet.title}`,
           format: 'Video',
           thumbnail: item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url,
@@ -80,7 +89,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       })
 
       const summary = catId
-        ? `Top trending ${category} videos on YouTube right now`
+        ? `Top trending ${category} videos on YouTube`
         : niche
         ? `Top YouTube videos related to "${niche}"`
         : 'Top trending videos on YouTube right now'
@@ -88,7 +97,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({ trends, summary })
     }
 
-    // Non-YouTube platforms — use Gemini to generate trend ideas
+    // Non-YouTube: Gemini
     const geminiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
       {
@@ -97,8 +106,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         body: JSON.stringify({
           contents: [{
             parts: [{
-              text: `List 8 trending content topics on ${platform} right now in ${category || 'general'} niche${niche ? ` related to ${niche}` : ''}. Return JSON only:
-[{"topic":"title","category":"niche","viralityScore":85,"growth":"+2.3M views","contentIdea":"Create a video about...","format":"Reel"}]`
+              text: `List 8 trending content topics on ${platform} right now in ${category || 'general'} niche${niche ? ` related to ${niche}` : ''}. Return JSON only, no markdown:
+[{"topic":"title","category":"niche","viralityScore":85,"growth":"+2.3M views","contentIdea":"Create content about...","format":"Reel","thumbnail":null,"videoUrl":null}]`
             }]
           }],
           generationConfig: { temperature: 0.7, maxOutputTokens: 800 },

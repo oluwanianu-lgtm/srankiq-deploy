@@ -31,64 +31,64 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { message, history = [], platform = 'YouTube' } = req.body
   if (!message) return res.status(400).json({ error: 'message required' })
 
-  const systemPrompt = `You are SRankIQ AI, an expert ${platform} content strategist. Your job is to directly answer whatever the user asks with specific, actionable advice. NEVER ask the user for more information if they already gave you context. NEVER repeat the same response. Always give a direct, detailed answer to the exact question asked. FORMATTING: Never use markdown (**, ##, *, backticks). Use plain text. For lists use 1. 2. 3. or dashes. Be specific, energetic and practical.`
+  const systemPrompt = `You are SRankIQ AI, a world-class ${platform} content strategist and growth expert. Your job is to give COMPLETE, DETAILED, SPECIFIC answers. Never cut off mid-sentence. Always finish every thought completely.
 
-  try {
-    // Build a single prompt that includes full history as context
-    // This avoids Gemini's strict alternating role requirement
-    let fullPrompt = systemPrompt + '\n\n'
+RULES:
+- Answer the EXACT question asked — never deflect or ask for more info if context was already given
+- Give COMPLETE answers — if listing 30 days of content, list ALL 30 days
+- Use plain text only — no markdown (**bold**, ##headers, *italic*, backticks)
+- Use numbered lists (1. 2. 3.) and dashes (- item) for structure
+- Be specific with real examples, real titles, real strategies
+- Never repeat the same response twice`
 
-    if (history.length > 0) {
-      fullPrompt += 'CONVERSATION SO FAR:\n'
-      const recent = history.slice(-8)
-      for (const m of recent) {
-        const role = m.role === 'assistant' ? 'SRankIQ AI' : 'User'
-        fullPrompt += `${role}: ${m.content}\n\n`
-      }
-      fullPrompt += '---\n\n'
+  // Build prompt with full conversation context as a single text block
+  let fullPrompt = systemPrompt + '\n\n'
+
+  if (history.length > 0) {
+    fullPrompt += 'PREVIOUS CONVERSATION:\n'
+    const recent = history.slice(-6)
+    for (const m of recent) {
+      const role = m.role === 'assistant' ? 'SRankIQ AI' : 'Creator'
+      fullPrompt += `${role}: ${m.content}\n\n`
     }
+    fullPrompt += '---\n\n'
+  }
 
-    fullPrompt += `User: ${message}\n\nSRankIQ AI (respond directly and specifically to the user message above):`
+  fullPrompt += `Creator asks: ${message}\n\nSRankIQ AI (give a complete, detailed, specific answer — do not cut off):`
 
-    const models = ['gemini-2.5-flash', 'gemini-1.5-flash']
-    let rawReply = ''
+  const models = ['gemini-2.5-flash', 'gemini-1.5-flash']
+  let rawReply = ''
 
-    for (const model of models) {
-      try {
-        const r = await fetch(
-          `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${GEMINI_KEY}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
-              generationConfig: { temperature: 0.85, maxOutputTokens: 1200 },
-            }),
-          }
-        )
-        if (!r.ok) continue
-        const data = await r.json()
-        if (data.error) continue
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text
-        if (text) { rawReply = text; break }
-      } catch { continue }
-    }
+  for (const model of models) {
+    try {
+      const r = await fetch(
+        `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${GEMINI_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+            // Increase token limit to prevent cutoff
+            generationConfig: { temperature: 0.85, maxOutputTokens: 2048 },
+          }),
+        }
+      )
+      if (!r.ok) continue
+      const data = await r.json()
+      if (data.error) { console.error(model, data.error); continue }
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text
+      if (text) { rawReply = text; break }
+    } catch (e) { console.error(model, e); continue }
+  }
 
-    if (!rawReply) {
-      return res.status(200).json({
-        reply: `Here is my direct answer to "${message}":\n\nI need to be honest — my connection to the AI model had a hiccup. Please try sending your message again and I will give you a full, detailed response right away!`,
-        ideas: [],
-      })
-    }
-
-    const reply = stripMarkdown(rawReply)
-    const ideas = extractIdeas(reply)
-    return res.status(200).json({ reply, ideas })
-  } catch (err: any) {
-    console.error('inspiration error:', err)
+  if (!rawReply) {
     return res.status(200).json({
-      reply: `Something went wrong. Please try again!`,
+      reply: `I had a connection issue. Please resend your message and I will give you a complete, detailed answer!`,
       ideas: [],
     })
   }
+
+  const reply = stripMarkdown(rawReply)
+  const ideas = extractIdeas(reply)
+  return res.status(200).json({ reply, ideas })
 }
