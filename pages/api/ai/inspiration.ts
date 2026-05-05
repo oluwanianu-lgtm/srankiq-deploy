@@ -20,10 +20,25 @@ function stripMarkdown(text: string): string {
 function extractIdeas(text: string): string[] {
   const ideas: string[] = []
   for (const line of text.split('\n')) {
-    const match = line.match(/^\d+[\.\)]\s+(.+)/)
-    if (match) ideas.push(match[1].replace(/\*\*/g, '').trim())
+    const numMatch = line.match(/^\d+[\.\)]\s+(.+)/)
+    if (numMatch) {
+      const idea = numMatch[1].replace(/\*\*/g, '').trim()
+      if (idea.length > 10) ideas.push(idea)
+    }
   }
   return ideas.slice(0, 10)
+}
+
+// Detect if message is a clone blueprint and reformat it nicely
+function preprocessMessage(message: string): string {
+  if (!message.includes('cloned the YouTube channel') && !message.includes('channel blueprint')) {
+    return message
+  }
+  // It's a blueprint message — instruct AI to use it as structured context
+  return `I have a YouTube channel blueprint. Please analyze it and give me a complete, structured 30-day content plan with specific video titles, posting days, thumbnail tips, and growth actions for each day. Format your response with clear day-by-day sections.
+
+BLUEPRINT:
+${message}`
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -31,41 +46,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { message, history = [], platform = 'YouTube' } = req.body
   if (!message) return res.status(400).json({ error: 'message required' })
 
-  const systemPrompt = `You are SRankIQ AI, a world-class ${platform} content strategist and growth expert. You operate at the level of the best AI assistants — giving COMPLETE, THOROUGH, DETAILED responses with no shortcuts.
+  const processedMessage = preprocessMessage(message)
 
-ABSOLUTE RULES:
-1. NEVER cut off mid-sentence or mid-list. Always complete every thought fully.
-2. If asked for a 30-day content plan, give ALL 30 days with full details for each day.
-3. If asked for video ideas, give complete titles, hooks, thumbnails, and descriptions.
-4. Answer the EXACT question asked — never deflect or ask for more info if context exists.
-5. Use plain text only — no markdown (no **, ##, *, backticks).
-6. Use numbered lists (1. 2. 3.) and section headers in CAPS.
-7. Be specific with real examples — channel names, video titles, view counts.
-8. Never repeat a response you already gave in this conversation.
-9. Go deep — surface-level answers are not acceptable.`
+  const systemPrompt = `You are SRankIQ AI, a world-class YouTube content strategist. Give COMPLETE, STRUCTURED, DETAILED responses.
 
-  // Build single-turn prompt with full history as context
+RESPONSE RULES:
+1. NEVER cut off mid-sentence or mid-list. Always finish everything completely.
+2. Structure your response clearly with sections.
+3. Use plain text only — no markdown (** ## * backticks).
+4. For section headers use: ALL CAPS with Roman numerals (I. II. III.) or numbers
+5. For numbered lists use: 1. 2. 3.
+6. For sub-items use: - item
+7. For key labels use: "Title:" "Hook:" "Thumbnail:" "Pillar:" "Day X:" etc.
+8. Always give specific examples — real titles, real hooks, real strategies.
+9. If asked for 30 days, give ALL 30 days with full details.
+10. Never repeat a response already given in the conversation.
+11. When given a blueprint, immediately start the 30-day plan without asking questions.`
+
   let fullPrompt = systemPrompt + '\n\n'
 
   if (history.length > 0) {
     fullPrompt += 'CONVERSATION HISTORY:\n'
-    const recent = history.slice(-8)
+    const recent = history.slice(-6)
     for (const m of recent) {
       const role = m.role === 'assistant' ? 'SRankIQ AI' : 'Creator'
-      // Truncate very long history entries to save tokens
-      const content = m.content.length > 1000 ? m.content.slice(0, 1000) + '...' : m.content
+      const content = m.content.length > 800 ? m.content.slice(0, 800) + '...' : m.content
       fullPrompt += `${role}: ${content}\n\n`
     }
     fullPrompt += '---\n\n'
   }
 
-  fullPrompt += `Creator: ${message}\n\nSRankIQ AI (give a COMPLETE, THOROUGH response — never stop mid-list, never cut off, finish everything fully):`
+  fullPrompt += `Creator: ${processedMessage}\n\nSRankIQ AI (give a COMPLETE structured response — use clear sections, finish everything, never cut off):`
 
-  // Try models in order — gemini-2.5-flash supports up to 65k output tokens
   const modelConfigs = [
     { model: 'gemini-2.5-flash', maxTokens: 8192 },
     { model: 'gemini-1.5-flash', maxTokens: 8192 },
-    { model: 'gemini-1.5-pro', maxTokens: 8192 },
   ]
 
   let rawReply = ''
@@ -79,43 +94,28 @@ ABSOLUTE RULES:
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
-            generationConfig: {
-              temperature: 0.85,
-              maxOutputTokens: maxTokens,
-              topP: 0.95,
-            },
+            generationConfig: { temperature: 0.85, maxOutputTokens: maxTokens, topP: 0.95 },
           }),
         }
       )
-
-      if (!r.ok) {
-        console.error(`${model} HTTP ${r.status}`)
-        continue
-      }
-
+      if (!r.ok) continue
       const data = await r.json()
-
-      // Check for finish reason — if MAX_TOKENS, the response was cut off
+      if (data.error) { console.error(model, data.error.message); continue }
       const finishReason = data.candidates?.[0]?.finishReason
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text
-
       if (text) {
         rawReply = text
-        // If cut off by token limit, append a note
         if (finishReason === 'MAX_TOKENS') {
           rawReply += '\n\n[Response was very long. Type "continue" to get the rest.]'
         }
         break
       }
-    } catch (e) {
-      console.error(`${model} error:`, e)
-      continue
-    }
+    } catch (e) { console.error(model, e); continue }
   }
 
   if (!rawReply) {
     return res.status(200).json({
-      reply: 'I had a connection issue. Please resend your message!',
+      reply: 'Connection issue — please resend your message and I will give you a complete response!',
       ideas: [],
     })
   }
