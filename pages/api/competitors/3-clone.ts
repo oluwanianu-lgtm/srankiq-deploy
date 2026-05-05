@@ -3,46 +3,6 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY!
 
-const FALLBACK_BLUEPRINT = (channelName: string) => ({
-  channelName: {
-    primary: `${channelName} Academy`,
-    alternatives: [`The ${channelName} Way`, `${channelName} Pro Tips`, `Learn From ${channelName}`],
-    reasoning: 'Similar branding that builds on the original channel name recognition',
-  },
-  channelDescription: `Inspired by ${channelName}'s proven content formula. High-quality videos covering trending topics with actionable value for viewers.`,
-  channelTags: ['youtube', 'viral', 'content creator', 'how to', 'tutorial', 'tips', 'trending', 'growth', 'strategy', 'beginner'],
-  niche: 'Content creation and YouTube growth',
-  targetAudience: 'Aspiring YouTubers and content creators aged 18-35',
-  contentPillars: [
-    { title: 'Tutorial Videos', description: 'Step-by-step educational content', frequency: '2x per week' },
-    { title: 'Trending Topics', description: 'Timely content on viral subjects', frequency: '2x per week' },
-    { title: 'Behind the Scenes', description: 'Process and growth transparency', frequency: '1x per week' },
-  ],
-  videoFormats: [
-    { format: 'Long-form Tutorial', duration: '10-20 min', description: 'In-depth value-packed content', example: `How I Replicated ${channelName}'s Success` },
-    { format: 'Quick Tips', duration: '3-7 min', description: 'Fast actionable advice', example: '5 Things That Changed My Channel' },
-    { format: 'YouTube Shorts', duration: 'Under 60s', description: 'Viral short-form clips', example: 'This one trick got me 1000 subscribers' },
-  ],
-  uploadSchedule: 'Post Tuesday, Thursday, and Saturday at 2PM in your target timezone',
-  thumbnailStyle: 'Bold contrasting colors, large readable text overlay, expressive face close-up, bright background',
-  titleFormula: '[Number] + [Power Word] + [Specific Result] — Example: "7 PROVEN Ways to Get 1000 Subscribers Fast"',
-  firstVideoIdeas: [
-    `Why I Started a Channel Like ${channelName}`,
-    'My Complete Content Strategy Revealed',
-    'How to Grow Fast on YouTube in 2026',
-    'The Real Secret Behind Viral Videos',
-    'My First 30 Days Content Plan',
-  ],
-  monetizationPath: 'Build to 1K subs for monetization → YouTube Partner Program → Brand sponsorships → Digital products/courses',
-  growthTips: [
-    'Post consistently for 90 days without stopping',
-    'Reply to every comment within the first hour of posting',
-    'Collaborate with 3-5 channels in your niche per month',
-    'Study your top 3 performing videos and make 10 more like them',
-  ],
-  estimatedTimeToResults: '3-6 months to first 1,000 subscribers with 3+ posts per week',
-})
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end()
   const { channelName, channelData } = req.body
@@ -52,15 +12,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const avgViews = channelData?.avgViewsFormatted || 'unknown'
   const keywords = (channelData?.rankingKeywords || []).slice(0, 5).join(', ')
   const strategy = channelData?.contentStrategy || ''
+  const topVideos = (channelData?.trendingVideos || []).slice(0, 3).map((v: any) => v.title).join(', ')
 
-  const prompt = `Create a YouTube channel blueprint to replicate "${channelName}" success (${subs} subs, ${avgViews} avg views).
-Strategy: ${strategy}
-Keywords: ${keywords}
+  // Add random seed to ensure different results each time
+  const seed = Math.random().toString(36).slice(2, 8)
+  const angles = [
+    'Focus on a unique personal angle and storytelling style',
+    'Focus on higher production value and cinematic quality',
+    'Focus on comedy and entertainment elements',
+    'Focus on educational depth and expert positioning',
+    'Focus on controversy and bold opinions',
+    'Focus on community building and audience interaction',
+    'Focus on trending topics and news-jacking',
+    'Focus on niche expertise and specialization',
+  ]
+  const randomAngle = angles[Math.floor(Math.random() * angles.length)]
 
-Return ONLY valid JSON, no markdown, no code blocks, no explanation. Start with { and end with }:
-{"channelName":{"primary":"name here","alternatives":["alt1","alt2","alt3"],"reasoning":"reason"},"channelDescription":"description 200 chars","channelTags":["t1","t2","t3","t4","t5","t6","t7","t8","t9","t10"],"niche":"niche","targetAudience":"audience","contentPillars":[{"title":"p1","description":"desc","frequency":"Nx/week"},{"title":"p2","description":"desc","frequency":"Nx/week"},{"title":"p3","description":"desc","frequency":"Nx/week"}],"videoFormats":[{"format":"f1","duration":"X-Y min","description":"desc","example":"title"},{"format":"f2","duration":"X-Y min","description":"desc","example":"title"},{"format":"f3","duration":"X-Y min","description":"desc","example":"title"}],"uploadSchedule":"schedule","thumbnailStyle":"style guide","titleFormula":"formula with example","firstVideoIdeas":["idea1","idea2","idea3","idea4","idea5"],"monetizationPath":"path","growthTips":["tip1","tip2","tip3","tip4"],"estimatedTimeToResults":"timeline"}`
+  const prompt = `Create a UNIQUE and CREATIVE YouTube channel blueprint inspired by "${channelName}" (${subs} subs, ${avgViews} avg views).
 
-  // Try to get AI blueprint
+Real channel data:
+- Strategy: ${strategy}
+- Top keywords: ${keywords}
+- Popular videos: ${topVideos}
+
+IMPORTANT: Generate FRESH, ORIGINAL ideas. Do NOT copy the original channel directly. 
+Differentiation angle: ${randomAngle}
+Variation seed: ${seed}
+
+Return ONLY valid JSON, no markdown, no code blocks:
+{"channelName":{"primary":"creative unique name NOT copying ${channelName}","alternatives":["alt1","alt2","alt3"],"reasoning":"why this name stands out"},"channelDescription":"compelling channel description 200-250 chars with keywords","channelTags":["tag1","tag2","tag3","tag4","tag5","tag6","tag7","tag8","tag9","tag10"],"niche":"very specific niche focus","targetAudience":"detailed audience description","contentPillars":[{"title":"pillar 1","description":"unique content angle","frequency":"Nx/week"},{"title":"pillar 2","description":"unique content angle","frequency":"Nx/week"},{"title":"pillar 3","description":"unique content angle","frequency":"Nx/week"}],"videoFormats":[{"format":"format name","duration":"X-Y min","description":"specific description","example":"specific creative title"},{"format":"format name","duration":"X-Y min","description":"specific description","example":"specific creative title"},{"format":"format name","duration":"X-Y min","description":"specific description","example":"specific creative title"}],"uploadSchedule":"very specific schedule with days and times","thumbnailStyle":"detailed unique thumbnail design guide","titleFormula":"specific formula with 3 real example titles","firstVideoIdeas":["specific idea 1 with full title","specific idea 2 with full title","specific idea 3 with full title","specific idea 4 with full title","specific idea 5 with full title"],"monetizationPath":"detailed monetization strategy with timeline","growthTips":["very specific tip 1","very specific tip 2","very specific tip 3","very specific tip 4"],"estimatedTimeToResults":"realistic timeline with milestones","uniqueEdge":"what makes this channel different from ${channelName}"}`
+
   const models = ['gemini-2.5-flash', 'gemini-1.5-flash']
 
   for (const model of models) {
@@ -72,40 +53,72 @@ Return ONLY valid JSON, no markdown, no code blocks, no explanation. Start with 
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.7, maxOutputTokens: 2000 },
+            // High temperature = more creative/varied output each time
+            generationConfig: { temperature: 0.95, maxOutputTokens: 2000, topP: 0.95, topK: 40 },
           }),
         }
       )
-
       if (!geminiRes.ok) continue
-
       const data = await geminiRes.json()
       let text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
-
-      // Strip any markdown fences
       text = text.replace(/```json\n?/gi, '').replace(/```\n?/gi, '').trim()
-
-      const s = text.indexOf('{')
-      const e = text.lastIndexOf('}')
-
-      if (s !== -1 && e !== -1) {
-        try {
-          const blueprint = JSON.parse(text.slice(s, e + 1))
-          return res.status(200).json({ blueprint, channelName })
-        } catch {
-          // JSON parse failed, try next model
-          continue
-        }
-      }
-    } catch {
-      continue
-    }
+      const s = text.indexOf('{'), e = text.lastIndexOf('}')
+      if (s === -1 || e === -1) continue
+      try {
+        const blueprint = JSON.parse(text.slice(s, e + 1))
+        return res.status(200).json({ blueprint, channelName })
+      } catch { continue }
+    } catch { continue }
   }
 
-  // All models failed — return fallback blueprint (never show error to user)
-  console.log('Using fallback blueprint for:', channelName)
+  // Fallback with randomness
+  const fallbackNames = [
+    `${channelName} Unlocked`, `Beyond ${channelName}`, `The ${channelName} Method`,
+    `${channelName} Decoded`, `Next Level Like ${channelName}`, `${channelName} Blueprint`
+  ]
+  const fallbackIdeas = [
+    `I Tried ${channelName}'s Exact Formula For 30 Days — Here's What Happened`,
+    `Why ${channelName} Gets Millions of Views (The Real Secret)`,
+    `I Copied ${channelName}'s Upload Schedule For a Week`,
+    `What ${channelName} Does That Nobody Talks About`,
+    `The ${channelName} Content Strategy Broken Down Step by Step`,
+  ]
+
   return res.status(200).json({
-    blueprint: FALLBACK_BLUEPRINT(channelName),
     channelName,
+    blueprint: {
+      channelName: {
+        primary: fallbackNames[Math.floor(Math.random() * fallbackNames.length)],
+        alternatives: fallbackNames.slice(0, 3),
+        reasoning: `Builds on ${channelName}'s brand recognition while establishing unique identity`,
+      },
+      channelDescription: `Taking inspiration from ${channelName}'s proven formula — but with our own unique twist. ${keywords ? 'Covering ' + keywords + '.' : ''} Fresh perspective, real results.`,
+      channelTags: ['youtube', 'viral', keywords.split(', ')[0] || 'content', 'creator', 'tips', 'trending', 'growth', 'tutorial', 'how-to', 'strategy'],
+      niche: `${channelName}-inspired content with a fresh angle`,
+      targetAudience: `Fans of ${channelName}-style content who want a fresh perspective`,
+      contentPillars: [
+        { title: 'Tutorial Deep Dives', description: 'In-depth educational content', frequency: '2x/week' },
+        { title: 'Trending Reactions', description: 'Fast response to viral topics', frequency: '2x/week' },
+        { title: 'Behind The Scenes', description: 'Creator journey and process', frequency: '1x/week' },
+      ],
+      videoFormats: [
+        { format: 'Long-form Tutorial', duration: '10-20 min', description: 'Educational deep dive', example: fallbackIdeas[0] },
+        { format: 'Quick Tips', duration: '3-7 min', description: 'Fast actionable advice', example: fallbackIdeas[1] },
+        { format: 'Shorts', duration: 'Under 60s', description: 'Viral clips from main videos', example: 'One tip that changed everything' },
+      ],
+      uploadSchedule: 'Tuesday, Thursday at 2PM and Saturday at 10AM in your audience timezone',
+      thumbnailStyle: 'Bold text, bright background, expressive reaction face close-up, high contrast colors',
+      titleFormula: '[Number] + [Power Word] + [Specific Result] | Examples: "7 Ways to Get 10K Subs Fast" / "I Did This For 30 Days And..." / "The Secret ${channelName} Never Told You"',
+      firstVideoIdeas: fallbackIdeas,
+      monetizationPath: '0-1K subs: Build audience → 1K-10K: Brand deals → 10K+: YouTube Partner Program + digital products',
+      growthTips: [
+        `Post consistently for 90 days — this is non-negotiable`,
+        `Engage with ${channelName}'s audience in their comments`,
+        `Collaborate with 2-3 similar-sized channels per month`,
+        `Repurpose every long video into 3-5 Shorts`,
+      ],
+      estimatedTimeToResults: '1K subs in 3 months, 10K in 6-9 months with 3+ posts/week',
+      uniqueEdge: `More personal, more niche-focused version of what ${channelName} does — but with your unique voice`,
+    }
   })
 }

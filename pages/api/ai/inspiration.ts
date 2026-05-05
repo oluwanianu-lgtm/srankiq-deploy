@@ -31,32 +31,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { message, history = [], platform = 'YouTube' } = req.body
   if (!message) return res.status(400).json({ error: 'message required' })
 
-  const systemPrompt = `You are SRankIQ AI, an expert ${platform} content strategist. Give specific, actionable advice to help creators grow viral channels. FORMATTING RULES - strictly follow: Never use markdown symbols (**, ##, *, __, backticks). Use plain text only. For lists use numbers (1. 2. 3.) or dashes (- item). Be energetic, specific, and practical.`
+  const systemPrompt = `You are SRankIQ AI, an expert ${platform} content strategist. Your job is to directly answer whatever the user asks with specific, actionable advice. NEVER ask the user for more information if they already gave you context. NEVER repeat the same response. Always give a direct, detailed answer to the exact question asked. FORMATTING: Never use markdown (**, ##, *, backticks). Use plain text. For lists use 1. 2. 3. or dashes. Be specific, energetic and practical.`
 
   try {
-    // Build valid Gemini conversation — must alternate user/model
-    const contents: any[] = []
+    // Build a single prompt that includes full history as context
+    // This avoids Gemini's strict alternating role requirement
+    let fullPrompt = systemPrompt + '\n\n'
 
-    // Add history, ensuring proper alternation
-    const recentHistory = history.slice(-10)
-    for (const m of recentHistory) {
-      const role = m.role === 'assistant' ? 'model' : 'user'
-      // Skip if same role as last added (Gemini requires alternating)
-      if (contents.length > 0 && contents[contents.length - 1].role === role) continue
-      contents.push({ role, parts: [{ text: m.content }] })
+    if (history.length > 0) {
+      fullPrompt += 'CONVERSATION SO FAR:\n'
+      const recent = history.slice(-8)
+      for (const m of recent) {
+        const role = m.role === 'assistant' ? 'SRankIQ AI' : 'User'
+        fullPrompt += `${role}: ${m.content}\n\n`
+      }
+      fullPrompt += '---\n\n'
     }
 
-    // Always end with the current user message
-    // If last in contents is 'user', we need to add as continuation
-    if (contents.length === 0 || contents[contents.length - 1].role === 'model') {
-      contents.push({ role: 'user', parts: [{ text: `${systemPrompt}\n\n${message}` }] })
-    } else {
-      // Last was user, add model placeholder then new user message
-      contents.push({ role: 'model', parts: [{ text: 'Understood, let me help you with that.' }] })
-      contents.push({ role: 'user', parts: [{ text: message }] })
-    }
+    fullPrompt += `User: ${message}\n\nSRankIQ AI (respond directly and specifically to the user message above):`
 
-    const models = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
+    const models = ['gemini-2.5-flash', 'gemini-1.5-flash']
     let rawReply = ''
 
     for (const model of models) {
@@ -67,42 +61,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              contents,
-              generationConfig: { temperature: 0.8, maxOutputTokens: 1200 },
-              systemInstruction: { parts: [{ text: systemPrompt }] },
+              contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+              generationConfig: { temperature: 0.85, maxOutputTokens: 1200 },
             }),
           }
         )
-        if (!r.ok) { console.error(`${model} returned ${r.status}`); continue }
+        if (!r.ok) continue
         const data = await r.json()
-        if (data.error) { console.error(`${model} error:`, data.error); continue }
+        if (data.error) continue
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text
         if (text) { rawReply = text; break }
-      } catch (e) { console.error(`${model} threw:`, e); continue }
-    }
-
-    if (!rawReply) {
-      // Last resort: simple single-turn call with no history
-      try {
-        const r = await fetch(
-          `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nUser question: ${message}` }] }],
-              generationConfig: { temperature: 0.8, maxOutputTokens: 1200 },
-            }),
-          }
-        )
-        const data = await r.json()
-        rawReply = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
-      } catch { /* ignore */ }
+      } catch { continue }
     }
 
     if (!rawReply) {
       return res.status(200).json({
-        reply: `Great question about ${platform} strategy! To give you the best advice, could you tell me more about your channel niche and current subscriber count? That way I can give you a personalized action plan.`,
+        reply: `Here is my direct answer to "${message}":\n\nI need to be honest — my connection to the AI model had a hiccup. Please try sending your message again and I will give you a full, detailed response right away!`,
         ideas: [],
       })
     }
@@ -113,7 +87,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   } catch (err: any) {
     console.error('inspiration error:', err)
     return res.status(200).json({
-      reply: `I can help you with your ${platform} strategy! What specific area would you like to focus on — video ideas, titles, thumbnails, or growth tactics?`,
+      reply: `Something went wrong. Please try again!`,
       ideas: [],
     })
   }
