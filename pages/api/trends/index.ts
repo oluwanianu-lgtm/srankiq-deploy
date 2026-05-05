@@ -3,99 +3,76 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY!
 
-// YouTube category IDs - only use for categories with accurate YouTube mapping
-const YT_CATEGORY_ID: Record<string, string> = {
-  'Gaming': '20',
-  'Music': '10',
-  'Sports': '17',
-  'News': '25',
-  'Education': '27',
-  'Entertainment': '24',
-  'Comedy': '23',
-  'Film': '1',
-  'Travel': '19',
-}
-
-// For these categories, use keyword search instead of category ID
-// because YouTube category IDs don't match well
-const KEYWORD_SEARCH: Record<string, string> = {
-  'Tech': 'technology gadgets AI software',
-  'Fashion': 'fashion style outfit clothing',
-  'Science': 'science experiment discovery research',
-  'Food': 'food cooking recipe chef',
-  'Fitness': 'fitness workout gym exercise',
-  'Finance': 'money finance investing stock market',
+// Use YouTube SEARCH for every category — much more accurate than category IDs
+// Category IDs on YouTube are unreliable and return wrong content
+const CATEGORY_KEYWORDS: Record<string, string> = {
+  'Gaming': 'gaming gameplay video game playthrough 2025',
+  'Music': 'music video song official 2025',
+  'Tech': 'technology gadgets AI phone review 2025',
+  'Sports': 'sports highlights football basketball 2025',
+  'News': 'news today breaking news 2025',
+  'Education': 'how to learn tutorial educational 2025',
+  'Entertainment': 'entertainment funny viral trending 2025',
+  'Comedy': 'comedy funny video sketch humor 2025',
+  'Film': 'movie film trailer review 2025',
+  'Fashion': 'fashion style outfit lookbook clothing 2025',
+  'Science': 'science experiment facts discovery 2025',
+  'Food': 'food cooking recipe restaurant 2025',
+  'Travel': 'travel vlog destination adventure 2025',
+  'Finance': 'finance money investing stocks crypto 2025',
+  'Fitness': 'fitness workout gym exercise training 2025',
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
 
   const { platform, category, niche } = req.query
-  const cat = category as string || 'All'
-  const nicheStr = niche as string || ''
+  const cat = (category as string) || 'All'
+  const nicheStr = (niche as string) || ''
 
   try {
     if (platform === 'YouTube' || !platform) {
       const ytKey = process.env.YOUTUBE_API_KEY!
-
-      // Decide fetch strategy
-      const catId = (cat && cat !== 'All') ? YT_CATEGORY_ID[cat] : null
-      const kwSearch = (cat && cat !== 'All') ? KEYWORD_SEARCH[cat] : null
-
       let items: any[] = []
 
-      if (catId) {
-        // Use YouTube category ID
-        const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&chart=mostPopular&regionCode=US&maxResults=20&videoCategoryId=${catId}&key=${ytKey}`
+      if (cat === 'All' && !nicheStr) {
+        // General trending — use mostPopular chart
+        const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&chart=mostPopular&regionCode=US&maxResults=20&key=${ytKey}`
         const r = await fetch(url)
         const d = await r.json()
         items = d.items || []
-      } else if (kwSearch || nicheStr) {
-        // Use search API with keyword for better niche matching
-        const searchQuery = nicheStr || kwSearch || ''
-        const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(searchQuery)}&type=video&order=viewCount&maxResults=20&regionCode=US&key=${ytKey}`
+      } else {
+        // Use SEARCH for specific categories — much more accurate
+        const searchQuery = nicheStr || CATEGORY_KEYWORDS[cat] || cat
+        const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(searchQuery)}&type=video&order=viewCount&maxResults=20&regionCode=US&publishedAfter=${getDateMonthsAgo(6)}&key=${ytKey}`
         const r = await fetch(searchUrl)
         const d = await r.json()
         const searchItems = d.items || []
 
         if (searchItems.length > 0) {
           const videoIds = searchItems.map((it: any) => it.id?.videoId).filter(Boolean).join(',')
-          const statsUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${videoIds}&key=${ytKey}`
-          const sr = await fetch(statsUrl)
-          const sd = await sr.json()
-          items = sd.items || []
+          if (videoIds) {
+            const statsUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${videoIds}&key=${ytKey}`
+            const sr = await fetch(statsUrl)
+            const sd = await sr.json()
+            items = sd.items || []
+          }
         }
-      } else {
-        // All categories — most popular overall
-        const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&chart=mostPopular&regionCode=US&maxResults=20&key=${ytKey}`
-        const r = await fetch(url)
-        const d = await r.json()
-        items = d.items || []
-      }
 
-      // Apply niche keyword filter on top of results
-      if (nicheStr && items.length > 0) {
-        const nicheL = nicheStr.toLowerCase()
-        const filtered = items.filter((item: any) =>
-          item.snippet?.title?.toLowerCase().includes(nicheL) ||
-          item.snippet?.description?.toLowerCase().includes(nicheL) ||
-          (item.snippet?.tags || []).some((t: string) => t.toLowerCase().includes(nicheL))
-        )
-        if (filtered.length >= 3) items = filtered
-      }
-
-      // Fallback if still empty
-      if (!items.length) {
-        const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&chart=mostPopular&regionCode=US&maxResults=20&key=${ytKey}`
-        const r = await fetch(url)
-        const d = await r.json()
-        items = d.items || []
+        // Fallback if search returned nothing
+        if (!items.length) {
+          const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&chart=mostPopular&regionCode=US&maxResults=20&key=${ytKey}`
+          const r = await fetch(url)
+          const d = await r.json()
+          items = d.items || []
+        }
       }
 
       const trends = items.map((item: any) => {
         const views = parseInt(item.statistics?.viewCount || '0')
         const likes = parseInt(item.statistics?.likeCount || '0')
         const comments = parseInt(item.statistics?.commentCount || '0')
+        const id = item.id?.videoId || item.id
         return {
           topic: item.snippet?.title,
           category: item.snippet?.channelTitle,
@@ -109,8 +86,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           format: 'Video',
           thumbnail: item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url,
           channelName: item.snippet?.channelTitle,
-          videoId: item.id?.videoId || item.id,
-          videoUrl: `https://youtube.com/watch?v=${item.id?.videoId || item.id}`,
+          videoId: id,
+          videoUrl: `https://youtube.com/watch?v=${id}`,
           publishedAt: item.snippet?.publishedAt,
         }
       })
@@ -133,7 +110,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         body: JSON.stringify({
           contents: [{
             parts: [{
-              text: `List 8 trending content topics on ${platform} right now in ${cat || 'general'} niche${nicheStr ? ` related to ${nicheStr}` : ''}. Return JSON only, no markdown:
+              text: `List 8 trending content topics on ${platform} right now in ${cat || 'general'} niche${nicheStr ? ` related to ${nicheStr}` : ''}. Return JSON array only, no markdown:
 [{"topic":"title","category":"niche","viralityScore":85,"growth":"+2.3M views","contentIdea":"Create content about...","format":"Reel","thumbnail":null,"videoUrl":null}]`
             }]
           }],
@@ -152,4 +129,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.error('trends error:', err)
     return res.status(500).json({ error: err.message, trends: [] })
   }
+}
+
+function getDateMonthsAgo(months: number): string {
+  const d = new Date()
+  d.setMonth(d.getMonth() - months)
+  return d.toISOString()
 }
