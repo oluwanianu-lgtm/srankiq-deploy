@@ -6,7 +6,7 @@ import { withAuth } from '../lib/withAuth'
 import { usePlatform } from '../contexts/PlatformContext'
 import axios from 'axios'
 import toast from 'react-hot-toast'
-import { FiSend, FiCopy, FiRotateCcw, FiArrowRight, FiZap, FiChevronDown } from 'react-icons/fi'
+import { FiSend, FiCopy, FiRotateCcw, FiArrowRight, FiPlus, FiZap, FiTrendingUp, FiTarget, FiVideo, FiCalendar, FiEdit3 } from 'react-icons/fi'
 import { useRouter } from 'next/router'
 
 interface Message {
@@ -17,135 +17,201 @@ interface Message {
   truncated?: boolean
 }
 
-type Theme = 'dark' | 'light' | 'red'
+type Theme = 'dark' | 'light'
 
-const THEMES = [
-  { key: 'dark' as Theme, icon: '🌙' },
-  { key: 'light' as Theme, icon: '☀️' },
-  { key: 'red' as Theme, icon: '🔴' },
-]
+const STORAGE_KEY = 'srankiq_chat_v3'
+const THEME_KEY = 'srankiq_theme_v3'
 
-// Theme CSS values
-const T = {
-  dark: {
-    page: 'bg-[#0a0a14]',
-    header: 'bg-[#0a0a14]/98 border-white/8',
-    messages: 'bg-[#0a0a14]',
-    bubbleAI: 'bg-[#131320] border border-white/10 text-white/90',
-    bubbleUser: 'bg-[#0070f3] text-white',
-    avatarAI: 'bg-gradient-to-br from-cyan/30 to-magenta/30 border border-cyan/20 text-cyan',
-    avatarUser: 'bg-[#0070f3] text-white',
-    input: 'bg-[#131320] border-white/10 text-white placeholder-white/25',
-    inputWrap: 'bg-[#0f0f1e] border-white/10',
-    footer: 'bg-[#0a0a14]/98 border-white/8',
-    text: 'text-white',
-    muted: 'text-white/35',
-    border: 'border-white/8',
-    accent: 'text-cyan',
-    sendBtn: 'bg-[#0070f3] hover:bg-[#0060df] text-white',
-    ideaCard: 'bg-[#131320] border-white/10 text-white/80 hover:border-white/20',
-    themeBtn: 'bg-white/10',
-    starter: 'bg-[#131320] border-white/8 text-white/50 hover:text-white/80 hover:border-white/20 hover:bg-white/5',
-    scrollbar: 'dark',
-  },
-  light: {
-    page: 'bg-[#f7f7f8]',
-    header: 'bg-white/98 border-gray-200',
-    messages: 'bg-[#f7f7f8]',
-    bubbleAI: 'bg-white border border-gray-200 text-gray-800',
-    bubbleUser: 'bg-[#0070f3] text-white',
-    avatarAI: 'bg-blue-100 border border-blue-200 text-blue-600',
-    avatarUser: 'bg-[#0070f3] text-white',
-    input: 'bg-white border-gray-300 text-gray-800 placeholder-gray-400',
-    inputWrap: 'bg-white border-gray-200',
-    footer: 'bg-white/98 border-gray-200',
-    text: 'text-gray-900',
-    muted: 'text-gray-400',
-    border: 'border-gray-200',
-    accent: 'text-blue-600',
-    sendBtn: 'bg-[#0070f3] hover:bg-[#0060df] text-white',
-    ideaCard: 'bg-blue-50 border-blue-200 text-gray-700 hover:border-blue-300',
-    themeBtn: 'bg-gray-100',
-    starter: 'bg-white border-gray-200 text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50',
-    scrollbar: 'light',
-  },
-  red: {
-    page: 'bg-[#0d0000]',
-    header: 'bg-[#0d0000]/98 border-red-900/20',
-    messages: 'bg-[#0d0000]',
-    bubbleAI: 'bg-[#1a0505] border border-red-900/30 text-white/90',
-    bubbleUser: 'bg-red-700 text-white',
-    avatarAI: 'bg-red-900/40 border border-red-700/40 text-red-400',
-    avatarUser: 'bg-red-700 text-white',
-    input: 'bg-[#1a0505] border-red-900/30 text-white placeholder-red-300/25',
-    inputWrap: 'bg-[#120000] border-red-900/25',
-    footer: 'bg-[#0d0000]/98 border-red-900/20',
-    text: 'text-white',
-    muted: 'text-red-300/35',
-    border: 'border-red-900/20',
-    accent: 'text-red-400',
-    sendBtn: 'bg-red-700 hover:bg-red-600 text-white',
-    ideaCard: 'bg-[#1a0505] border-red-900/30 text-white/80 hover:border-red-700/50',
-    themeBtn: 'bg-red-900/30',
-    starter: 'bg-[#1a0505] border-red-900/20 text-red-300/40 hover:text-red-300/70 hover:border-red-900/40',
-    scrollbar: 'dark',
-  },
+// Auto-detect theme based on time: 6AM-7PM = light, 7PM-6AM = dark
+function getAutoTheme(): Theme {
+  const h = new Date().getHours()
+  return h >= 6 && h < 19 ? 'light' : 'dark'
 }
 
-const STARTERS = [
-  { icon: '🔥', text: 'Give me 5 viral video ideas with full titles and hooks' },
-  { icon: '📅', text: 'Create a complete 30-day content calendar for my channel' },
-  { icon: '📈', text: "What's trending on YouTube right now in tech/finance?" },
-  { icon: '🪝', text: 'Write 10 powerful video hooks that stop the scroll' },
-  { icon: '🎯', text: 'What type of videos grow channels fastest in 2026?' },
-  { icon: '📝', text: 'Give me 20 YouTube title formulas that get clicks' },
+const DARK = {
+  page: 'bg-[#0d0d0d]',
+  sidebar: 'bg-[#111111] border-r border-white/5',
+  header: 'bg-[#0d0d0d]/95 border-b border-white/5',
+  main: 'bg-[#0d0d0d]',
+  bubbleAI: 'text-[#e8e8e8]',
+  bubbleUser: 'bg-[#1a1a1a] border border-white/8 text-[#e8e8e8]',
+  avatarAI: 'bg-gradient-to-br from-[#00d4ff] to-[#7b2fff] text-white',
+  avatarUser: 'bg-[#2a2a2a] border border-white/10 text-white/80',
+  input: 'bg-[#1a1a1a] border border-white/8 text-white placeholder-white/20',
+  inputBtn: 'bg-white text-black hover:bg-white/90',
+  text: 'text-white',
+  textSecondary: 'text-white/50',
+  card: 'bg-[#141414] border border-white/6 hover:border-white/12',
+  cardActive: 'bg-[#1a1a1a] border-white/12',
+  accent: '#00d4ff',
+  accentText: 'text-[#00d4ff]',
+  divider: 'border-white/5',
+  badge: 'bg-white/5 text-white/50 border border-white/8',
+  sectionHead: 'text-white/30',
+  codeBlock: 'bg-[#0a0a0a] border border-white/6 text-[#00d4ff]',
+}
+
+const LIGHT = {
+  page: 'bg-[#fafafa]',
+  sidebar: 'bg-white border-r border-gray-100',
+  header: 'bg-white/95 border-b border-gray-100',
+  main: 'bg-[#fafafa]',
+  bubbleAI: 'text-[#1a1a1a]',
+  bubbleUser: 'bg-white border border-gray-200 text-[#1a1a1a]',
+  avatarAI: 'bg-gradient-to-br from-[#0070f3] to-[#7b2fff] text-white',
+  avatarUser: 'bg-gray-100 border border-gray-200 text-gray-600',
+  input: 'bg-white border border-gray-200 text-gray-900 placeholder-gray-400',
+  inputBtn: 'bg-[#0d0d0d] text-white hover:bg-[#1a1a1a]',
+  text: 'text-[#0d0d0d]',
+  textSecondary: 'text-gray-400',
+  card: 'bg-white border border-gray-150 hover:border-gray-250 shadow-sm',
+  cardActive: 'bg-gray-50 border-gray-200',
+  accent: '#0070f3',
+  accentText: 'text-[#0070f3]',
+  divider: 'border-gray-100',
+  badge: 'bg-gray-100 text-gray-500 border border-gray-200',
+  sectionHead: 'text-gray-400',
+  codeBlock: 'bg-gray-50 border border-gray-200 text-[#0070f3]',
+}
+
+const STARTER_CARDS = [
+  { icon: <FiZap size={16} />, title: 'Video ideas', prompt: 'Based on my channel, what are 10 specific viral video ideas with full titles, hooks, and thumbnail concepts?' },
+  { icon: <FiTrendingUp size={16} />, title: 'More views', prompt: 'Give me a complete strategy to get more views on YouTube in 2026 with specific tactics and examples.' },
+  { icon: <FiTarget size={16} />, title: 'Channel audit', prompt: 'Help me audit my YouTube channel. What are the key areas I should improve to grow faster?' },
+  { icon: <FiVideo size={16} />, title: 'Video review', prompt: 'Give me a complete guide on how to make my videos more engaging so viewers watch till the end.' },
+  { icon: <FiCalendar size={16} />, title: '30-day plan', prompt: 'Create a complete 30-day YouTube content calendar with specific video titles, posting days, and thumbnail tips for each day.' },
+  { icon: <FiEdit3 size={16} />, title: 'Title formula', prompt: 'Give me 20 YouTube title formulas that guarantee clicks, with real examples for each formula.' },
 ]
 
-const STORAGE_KEY = 'srankiq_inspiration_v2'
-const THEME_KEY = 'srankiq_theme_v2'
+function formatContent(text: string, isDark: boolean) {
+  const lines = text.split('\n')
+  const elements: React.ReactNode[] = []
+  let keyCounter = 0
 
-const DEFAULT_MESSAGE: Message = {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const k = keyCounter++
+
+    // Empty line — spacer
+    if (!line.trim()) {
+      elements.push(<div key={k} className="h-2" />)
+      continue
+    }
+
+    // ALL CAPS line = section header
+    if (line === line.toUpperCase() && line.length > 3 && /[A-Z]/.test(line) && !line.match(/^\d/)) {
+      elements.push(
+        <div key={k} className={`text-[10px] font-bold tracking-widest uppercase mt-4 mb-1 ${isDark ? 'text-white/30' : 'text-gray-400'}`}>
+          {line}
+        </div>
+      )
+      continue
+    }
+
+    // Numbered list item
+    const numMatch = line.match(/^(\d+)[.\)]\s+(.+)/)
+    if (numMatch) {
+      elements.push(
+        <div key={k} className="flex gap-3 py-0.5">
+          <span className={`text-xs font-bold mt-0.5 flex-shrink-0 w-5 text-right ${isDark ? 'text-[#00d4ff]' : 'text-[#0070f3]'}`}>
+            {numMatch[1]}.
+          </span>
+          <span className="text-sm leading-relaxed">{numMatch[2]}</span>
+        </div>
+      )
+      continue
+    }
+
+    // Dash bullet
+    const dashMatch = line.match(/^[-•]\s+(.+)/)
+    if (dashMatch) {
+      elements.push(
+        <div key={k} className="flex gap-3 py-0.5">
+          <span className={`text-xs mt-1.5 flex-shrink-0 ${isDark ? 'text-white/30' : 'text-gray-400'}`}>—</span>
+          <span className="text-sm leading-relaxed">{dashMatch[1]}</span>
+        </div>
+      )
+      continue
+    }
+
+    // Day/Title pattern (e.g. "Day 1:" or "Title:")
+    const labelMatch = line.match(/^(Day \d+|Title|Pillar|Week \d+|Phase \d+|Step \d+|Tip \d+)[:.]?\s*(.*)/)
+    if (labelMatch) {
+      elements.push(
+        <div key={k} className="flex gap-2 py-0.5 flex-wrap">
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-md flex-shrink-0 ${isDark ? 'bg-white/6 text-[#00d4ff]' : 'bg-blue-50 text-[#0070f3]'}`}>
+            {labelMatch[1]}
+          </span>
+          {labelMatch[2] && <span className="text-sm leading-relaxed">{labelMatch[2]}</span>}
+        </div>
+      )
+      continue
+    }
+
+    // Regular paragraph
+    elements.push(
+      <p key={k} className="text-sm leading-relaxed">
+        {line}
+      </p>
+    )
+  }
+
+  return elements
+}
+
+const DEFAULT_MSG = (ts: string): Message => ({
   role: 'assistant',
-  content: `Hey! I'm SRankIQ AI — your personal YouTube growth strategist. I give complete, detailed, specific advice — not surface-level tips. Ask me anything about growing your channel, and I'll give you a thorough answer with real examples and actionable steps. What do you need? 🎬`,
-  timestamp: '',
+  content: `How can I help you grow your YouTube channel today?\n\nI can help you with video ideas, content calendars, title formulas, hooks, thumbnail concepts, channel audits, growth strategies, and much more. Just ask and I'll give you a complete, detailed answer.`,
+  timestamp: ts,
   ideas: [],
-}
+})
 
 function InspirationPage() {
   const { activePlatform } = usePlatform()
   const router = useRouter()
   const autoSentRef = useRef(false)
   const [theme, setTheme] = useState<Theme>('dark')
-  const s = T[theme]
+  const isDark = theme === 'dark'
+  const s = isDark ? DARK : LIGHT
 
-  const [messages, setMessages] = useState<Message[]>([{ ...DEFAULT_MESSAGE, timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) }])
+  const now = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+  const [messages, setMessages] = useState<Message[]>([DEFAULT_MSG(now)])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const messagesRef = useRef<HTMLDivElement>(null)
 
-  // Load from localStorage
+  // Init: load saved chat + auto-detect theme
   useEffect(() => {
     try {
-      const savedTheme = localStorage.getItem(THEME_KEY) as Theme
-      if (savedTheme && T[savedTheme]) setTheme(savedTheme)
-      const saved = localStorage.getItem(STORAGE_KEY)
-      if (saved) {
-        const parsed = JSON.parse(saved)
+      // Check if user has manually set theme before
+      const saved = localStorage.getItem(THEME_KEY)
+      if (saved === 'manual-dark') setTheme('dark')
+      else if (saved === 'manual-light') setTheme('light')
+      else setTheme(getAutoTheme()) // auto by time
+
+      const savedChat = localStorage.getItem(STORAGE_KEY)
+      if (savedChat) {
+        const parsed = JSON.parse(savedChat)
         if (Array.isArray(parsed) && parsed.length > 0) setMessages(parsed)
       }
     } catch { }
+
+    // Re-check theme every 30 minutes
+    const interval = setInterval(() => {
+      const manual = localStorage.getItem(THEME_KEY)
+      if (!manual || manual === 'auto') setTheme(getAutoTheme())
+    }, 30 * 60 * 1000)
+    return () => clearInterval(interval)
   }, [])
 
-  // Save to localStorage
+  // Save chat
   useEffect(() => {
     try {
-      if (messages.length > 1) localStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-30)))
+      if (messages.length > 1) localStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-40)))
     } catch { }
   }, [messages])
 
-  // Scroll to bottom
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
@@ -155,13 +221,14 @@ function InspirationPage() {
     const msg = router.query.msg as string
     if (msg && !autoSentRef.current) {
       autoSentRef.current = true
-      setTimeout(() => send(decodeURIComponent(msg)), 500)
+      setTimeout(() => send(decodeURIComponent(msg)), 600)
     }
   }, [router.query.msg])
 
-  const switchTheme = (t: Theme) => {
-    setTheme(t)
-    try { localStorage.setItem(THEME_KEY, t) } catch { }
+  const toggleTheme = () => {
+    const next = isDark ? 'light' : 'dark'
+    setTheme(next)
+    try { localStorage.setItem(THEME_KEY, `manual-${next}`) } catch { }
   }
 
   const send = useCallback(async (text?: string) => {
@@ -177,23 +244,21 @@ function InspirationPage() {
     try {
       const history = messages.map(m => ({ role: m.role, content: m.content }))
       const res = await axios.post('/api/ai/inspiration', {
-        message: msg,
-        history,
+        message: msg, history,
         platform: activePlatform === 'yt' ? 'YouTube' : activePlatform,
       })
 
-      const reply = res.data.reply || 'Sorry, something went wrong!'
+      const reply = res.data.reply || 'Sorry, something went wrong. Please try again!'
       const truncated = reply.includes('[Response was very long')
-      const cleanReply = reply.replace('[Response was very long. Type "continue" to get the rest.]', '').trim()
+      const clean = reply.replace('[Response was very long. Type "continue" to get the rest.]', '').trim()
 
-      const aiMsg: Message = {
+      setMessages(prev => [...prev, {
         role: 'assistant',
-        content: cleanReply,
+        content: clean,
         ideas: res.data.ideas || [],
         timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
         truncated,
-      }
-      setMessages(prev => [...prev, aiMsg])
+      }])
     } catch {
       setMessages(prev => [...prev, {
         role: 'assistant',
@@ -206,191 +271,197 @@ function InspirationPage() {
     }
   }, [input, loading, messages, activePlatform])
 
-  const continueLast = () => send('continue from where you left off and complete the full response')
-
   const copy = (text: string) => { navigator.clipboard.writeText(text); toast.success('Copied!') }
-  const useInAITools = (idea: string) => router.push(`/ai-tools?topic=${encodeURIComponent(idea)}`)
-
-  const clearChat = () => {
+  const useInTools = (idea: string) => router.push(`/ai-tools?topic=${encodeURIComponent(idea)}`)
+  const newChat = () => {
     autoSentRef.current = false
-    const fresh = [{ ...DEFAULT_MESSAGE, timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) }]
-    setMessages(fresh)
+    const ts = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+    setMessages([DEFAULT_MSG(ts)])
     try { localStorage.removeItem(STORAGE_KEY) } catch { }
   }
 
+  const showStarters = messages.length === 1 && !loading
+
   return (
     <DashboardLayout title="Get Inspiration">
-      <div className={`flex flex-col h-full ${s.page}`}>
+      <div className={`flex flex-col h-full ${s.page} transition-colors duration-300`}>
 
-        {/* ── Header ── */}
-        <div className={`flex items-center justify-between px-5 py-3 border-b ${s.header} flex-shrink-0 backdrop-blur-md sticky top-0 z-10`}>
-          <div className="flex items-center gap-3">
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold flex-shrink-0 ${s.avatarAI}`}>
+        {/* ── Top Bar ── */}
+        <div className={`flex items-center justify-between px-5 h-12 border-b ${s.header} flex-shrink-0 z-10`}>
+          <div className="flex items-center gap-2.5">
+            {/* Animated logo mark */}
+            <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm font-bold ${s.avatarAI} flex-shrink-0`}>
               ✦
             </div>
-            <div>
-              <div className={`font-bold text-sm ${s.text}`}>SRankIQ AI</div>
-              <div className={`text-[10px] ${s.muted} flex items-center gap-1.5`}>
-                <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block animate-pulse" />
-                YouTube Growth Strategist · Always online
-              </div>
-            </div>
+            <span className={`font-semibold text-sm ${s.text}`}>SRankIQ AI</span>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full ${s.badge}`}>YouTube Coach</span>
           </div>
+
           <div className="flex items-center gap-2">
-            <div className={`flex items-center gap-0.5 p-1 rounded-lg border ${s.border}`}
-              style={{ background: theme === 'light' ? '#f3f4f6' : 'rgba(255,255,255,0.04)' }}>
-              {THEMES.map(th => (
-                <button key={th.key} onClick={() => switchTheme(th.key)} title={th.key}
-                  className={`w-7 h-7 rounded-md text-sm transition-all flex items-center justify-center
-                    ${theme === th.key ? s.themeBtn : 'opacity-40 hover:opacity-80'}`}>
-                  {th.icon}
-                </button>
-              ))}
-            </div>
-            <button onClick={clearChat}
-              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border ${s.border} ${s.muted} transition-opacity hover:opacity-80`}
-              style={{ background: theme === 'light' ? '#f9fafb' : 'rgba(255,255,255,0.04)' }}>
-              <FiRotateCcw size={11} /> New Chat
+            {/* Auto/manual theme toggle */}
+            <button onClick={toggleTheme}
+              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-all ${s.badge} hover:opacity-80`}>
+              {isDark ? '☀️' : '🌙'}
+              <span className={s.textSecondary}>{isDark ? 'Light' : 'Dark'}</span>
+            </button>
+
+            <button onClick={newChat}
+              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-all ${s.badge} hover:opacity-80`}>
+              <FiPlus size={11} />
+              <span className={s.textSecondary}>New chat</span>
             </button>
           </div>
         </div>
 
         {/* ── Messages ── */}
-        <div ref={messagesRef} className={`flex-1 overflow-y-auto ${s.messages}`}>
-          <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
+        <div className={`flex-1 overflow-y-auto ${s.main}`}>
+          <div className="max-w-2xl mx-auto px-4 py-6">
 
-            {/* Starter prompts */}
-            {messages.length === 1 && !loading && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-2">
-                {STARTERS.map((st, i) => (
+            {/* Welcome state */}
+            {showStarters && (
+              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+                className="text-center mb-8">
+                <div className={`text-2xl font-bold mb-1.5 ${s.text}`}>How can I help you grow?</div>
+                <div className={`text-sm ${s.textSecondary}`}>Ask me anything about your YouTube channel</div>
+              </motion.div>
+            )}
+
+            {/* Starter cards — VidIQ style */}
+            {showStarters && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}
+                className="grid grid-cols-2 gap-2.5 mb-8">
+                {STARTER_CARDS.map((card, i) => (
                   <motion.button key={i}
-                    initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                    onClick={() => send(st.text)}
-                    className={`text-left p-3 rounded-xl border text-xs leading-relaxed transition-all hover:scale-[1.01] ${s.starter}`}>
-                    <div className="text-base mb-1.5">{st.icon}</div>
-                    {st.text}
+                    initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.05 * i }}
+                    onClick={() => send(card.prompt)}
+                    className={`text-left p-4 rounded-xl border transition-all hover:scale-[1.01] ${s.card}`}>
+                    <div className={`mb-2 ${isDark ? 'text-white/40' : 'text-gray-400'}`}>{card.icon}</div>
+                    <div className={`text-sm font-semibold mb-1 ${s.text}`}>{card.title}</div>
+                    <div className={`text-xs leading-relaxed ${s.textSecondary}`}>{card.prompt.slice(0, 60)}...</div>
                   </motion.button>
                 ))}
               </motion.div>
             )}
 
             {/* Messages */}
-            {messages.map((msg, i) => (
-              <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+            <div className="space-y-6">
+              {messages.map((msg, i) => (
+                <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
 
-                {/* Avatar */}
-                <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold self-end
-                  ${msg.role === 'assistant' ? s.avatarAI : s.avatarUser}`}>
-                  {msg.role === 'assistant' ? '✦' : 'U'}
-                </div>
-
-                <div className={`flex flex-col gap-1.5 ${msg.role === 'user' ? 'items-end max-w-[75%]' : 'items-start max-w-[85%]'}`}>
-
-                  {/* Sender + time */}
-                  <div className={`text-[10px] ${s.muted} px-1`}>
-                    {msg.role === 'assistant' ? 'SRankIQ AI' : 'You'}
-                    {msg.timestamp && ` · ${msg.timestamp}`}
-                  </div>
-
-                  {/* Bubble */}
-                  <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words
-                    ${msg.role === 'user' ? 'rounded-tr-sm' : 'rounded-tl-sm shadow-sm'}
-                    ${msg.role === 'assistant' ? s.bubbleAI : s.bubbleUser}`}>
-                    {msg.content}
-                  </div>
-
-                  {/* Truncated notice */}
-                  {msg.truncated && (
-                    <button onClick={continueLast}
-                      className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border ${s.border} ${s.accent} hover:opacity-80 transition-opacity`}
-                      style={{ background: theme === 'light' ? '#f0f7ff' : 'rgba(0,112,243,0.1)' }}>
-                      <FiChevronDown size={12} /> Continue response
-                    </button>
-                  )}
-
-                  {/* Idea chips */}
-                  {msg.ideas && msg.ideas.length > 0 && (
-                    <div className="space-y-1.5 w-full">
-                      {msg.ideas.map((idea, j) => (
-                        <div key={j} className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs transition-all group cursor-default ${s.ideaCard}`}>
-                          <span className={`font-bold text-[10px] w-5 flex-shrink-0 ${s.accent}`}>{j + 1}.</span>
-                          <span className="flex-1">{idea}</span>
-                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => copy(idea)} title="Copy"
-                              className={`w-6 h-6 rounded flex items-center justify-center ${s.muted} hover:opacity-80`}>
-                              <FiCopy size={10} />
-                            </button>
-                            <button onClick={() => useInAITools(idea)} title="Use in AI Tools"
-                              className={`w-6 h-6 rounded flex items-center justify-center ${s.muted} hover:opacity-80`}>
-                              <FiArrowRight size={10} />
-                            </button>
-                          </div>
+                  {msg.role === 'user' ? (
+                    /* User message — right aligned card */
+                    <div className="flex justify-end">
+                      <div className="max-w-[80%]">
+                        <div className={`text-[10px] text-right mb-1 ${s.textSecondary}`}>You · {msg.timestamp}</div>
+                        <div className={`px-4 py-3 rounded-2xl rounded-tr-sm text-sm leading-relaxed ${s.bubbleUser}`}>
+                          {msg.content}
                         </div>
-                      ))}
+                      </div>
+                    </div>
+                  ) : (
+                    /* AI message — full width with avatar */
+                    <div className="flex gap-3">
+                      <div className={`w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center text-xs font-bold self-start mt-0.5 ${s.avatarAI}`}>
+                        ✦
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className={`text-[10px] mb-2 ${s.textSecondary}`}>SRankIQ AI · {msg.timestamp}</div>
+
+                        {/* Structured content */}
+                        <div className={`${s.bubbleAI} space-y-0.5`}>
+                          {i === 0 || true ? formatContent(msg.content, isDark) : (
+                            <p className="text-sm leading-relaxed">{msg.content}</p>
+                          )}
+                        </div>
+
+                        {/* Continue button */}
+                        {msg.truncated && (
+                          <button onClick={() => send('continue from exactly where you left off')}
+                            className={`mt-3 flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-all ${s.badge} hover:opacity-80`}>
+                            ↓ Continue response
+                          </button>
+                        )}
+
+                        {/* Idea chips */}
+                        {msg.ideas && msg.ideas.length > 0 && (
+                          <div className="mt-3 space-y-1.5">
+                            <div className={`text-[10px] font-semibold uppercase tracking-wider ${s.textSecondary}`}>Ideas to use</div>
+                            {msg.ideas.map((idea, j) => (
+                              <div key={j} className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs transition-all group cursor-default ${s.card}`}>
+                                <span className={`font-bold flex-shrink-0 w-4 ${isDark ? 'text-[#00d4ff]' : 'text-[#0070f3]'}`}>{j + 1}</span>
+                                <span className={`flex-1 ${s.text}`}>{idea}</span>
+                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button onClick={() => copy(idea)} className={`w-6 h-6 rounded flex items-center justify-center ${s.textSecondary} hover:opacity-80`}>
+                                    <FiCopy size={10} />
+                                  </button>
+                                  <button onClick={() => useInTools(idea)} className={`w-6 h-6 rounded flex items-center justify-center ${s.textSecondary} hover:opacity-80`}>
+                                    <FiArrowRight size={10} />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Copy */}
+                        {i > 0 && (
+                          <button onClick={() => copy(msg.content)}
+                            className={`mt-2 flex items-center gap-1 text-[10px] ${s.textSecondary} hover:opacity-80 transition-opacity`}>
+                            <FiCopy size={9} /> Copy
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
+                </motion.div>
+              ))}
 
-                  {/* Copy button on AI messages */}
-                  {msg.role === 'assistant' && i > 0 && (
-                    <button onClick={() => copy(msg.content)}
-                      className={`flex items-center gap-1 text-[10px] ${s.muted} hover:opacity-80 transition-opacity px-1`}>
-                      <FiCopy size={9} /> Copy response
-                    </button>
-                  )}
-                </div>
-              </motion.div>
-            ))}
-
-            {/* Loading animation */}
-            {loading && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-3">
-                <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center font-bold ${s.avatarAI}`}>✦</div>
-                <div className={`px-4 py-3 rounded-2xl rounded-tl-sm shadow-sm ${s.bubbleAI}`}>
-                  <div className="flex items-center gap-1.5">
+              {/* Loading */}
+              {loading && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-3">
+                  <div className={`w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center text-xs font-bold ${s.avatarAI}`}>✦</div>
+                  <div className="flex items-center gap-1.5 pt-1">
                     {[0, 0.15, 0.3].map((d, i) => (
                       <motion.div key={i}
-                        animate={{ scale: [1, 1.4, 1], opacity: [0.4, 1, 0.4] }}
-                        transition={{ repeat: Infinity, duration: 1, delay: d }}
-                        className={`w-2 h-2 rounded-full ${theme === 'red' ? 'bg-red-500' : theme === 'light' ? 'bg-blue-400' : 'bg-cyan-400'}`} />
+                        animate={{ scale: [1, 1.5, 1], opacity: [0.3, 1, 0.3] }}
+                        transition={{ repeat: Infinity, duration: 1.1, delay: d }}
+                        className={`w-1.5 h-1.5 rounded-full ${isDark ? 'bg-white/30' : 'bg-gray-400'}`} />
                     ))}
                   </div>
-                </div>
-              </motion.div>
-            )}
+                </motion.div>
+              )}
+            </div>
 
-            <div ref={bottomRef} className="h-1" />
+            <div ref={bottomRef} className="h-4" />
           </div>
         </div>
 
-        {/* ── Input area ── */}
-        <div className={`border-t ${s.footer} flex-shrink-0 backdrop-blur-md`}>
-          <div className="max-w-3xl mx-auto px-4 py-3">
-            <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border ${s.inputWrap} shadow-sm`}>
+        {/* ── Input ── */}
+        <div className={`flex-shrink-0 border-t ${s.divider} ${isDark ? 'bg-[#0d0d0d]' : 'bg-[#fafafa]'}`}>
+          <div className="max-w-2xl mx-auto px-4 py-3">
+            <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border ${s.input} shadow-sm`}>
               <input ref={inputRef}
-                className={`flex-1 bg-transparent outline-none text-sm ${s.input} border-0`}
+                className="flex-1 bg-transparent outline-none text-sm"
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-                placeholder="Ask anything — video ideas, 30-day plans, titles, hooks, growth strategies..."
+                placeholder="How can I help you grow?"
                 disabled={loading} />
               <button onClick={() => send()} disabled={!input.trim() || loading}
-                className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-all disabled:opacity-30 ${s.sendBtn}`}>
+                className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 transition-all disabled:opacity-30 ${s.inputBtn}`}>
                 {loading
-                  ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
-                    className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
-                  : <FiSend size={14} />}
+                  ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.8, ease: 'linear' }}
+                    className={`w-3.5 h-3.5 border-2 rounded-full ${isDark ? 'border-black/20 border-t-black' : 'border-white/30 border-t-white'}`} />
+                  : <FiSend size={13} />}
               </button>
             </div>
             <div className={`flex items-center justify-between mt-1.5 px-1`}>
-              <p className={`text-[10px] ${s.muted}`}>Enter to send · ↗ on any idea to use in AI Tools</p>
-              <p className={`text-[10px] ${s.muted}`}>{messages.length - 1} messages</p>
+              <p className={`text-[10px] ${s.textSecondary}`}>Enter to send · ↗ on any idea to use in AI Tools</p>
+              <p className={`text-[10px] ${s.textSecondary}`}>{messages.length - 1} messages · {isDark ? '🌙 Dark' : '☀️ Light'} mode</p>
             </div>
           </div>
         </div>
-
       </div>
     </DashboardLayout>
   )
