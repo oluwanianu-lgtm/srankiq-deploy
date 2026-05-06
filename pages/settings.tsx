@@ -125,7 +125,7 @@ function SettingsPage() {
 
   const handleConnect = (code: string) => {
     if (code === 'yt') { connectYouTube(); return }
-    if (code === 'tt') { connectTikTok(); return }
+    if (code === 'tk') { connectTikTok(); return }
     toast(`${PLATFORMS.find(p => p.code === code)?.name} OAuth coming soon!`, { icon: '🚧' })
   }
 
