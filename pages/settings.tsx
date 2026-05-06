@@ -105,8 +105,27 @@ function SettingsPage() {
     client.requestAccessToken()
   }
 
+  const connectTikTok = () => {
+    const clientKey = process.env.NEXT_PUBLIC_TIKTOK_CLIENT_KEY
+    const redirectUri = process.env.NEXT_PUBLIC_TIKTOK_REDIRECT_URI
+    if (!clientKey || !redirectUri) {
+      toast.error('TikTok keys missing — add NEXT_PUBLIC_TIKTOK_CLIENT_KEY to Netlify env vars')
+      return
+    }
+    const state = Math.random().toString(36).substring(2, 18)
+    sessionStorage.setItem('tiktok_oauth_state', state)
+    const authUrl = new URL('https://www.tiktok.com/v2/auth/authorize/')
+    authUrl.searchParams.set('client_key', clientKey)
+    authUrl.searchParams.set('scope', 'user.info.basic,video.list')
+    authUrl.searchParams.set('response_type', 'code')
+    authUrl.searchParams.set('redirect_uri', redirectUri)
+    authUrl.searchParams.set('state', state)
+    window.location.href = authUrl.toString()
+  }
+
   const handleConnect = (code: string) => {
     if (code === 'yt') { connectYouTube(); return }
+    if (code === 'tt') { connectTikTok(); return }
     toast(`${PLATFORMS.find(p => p.code === code)?.name} OAuth coming soon!`, { icon: '🚧' })
   }
 
