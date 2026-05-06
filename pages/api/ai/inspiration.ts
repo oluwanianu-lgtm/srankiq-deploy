@@ -3,15 +3,15 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY!
 
-const SYSTEM = `You are SRankIQ AI, an expert YouTube growth coach built into the SRankIQ platform.
+const SYSTEM = `You are SRankIQ AI, an expert YouTube growth coach.
 
 CRITICAL RULES:
-1. ALWAYS respond directly to what the user just said. If they say "hello", say hello back. If they ask a follow-up, answer it based on what was discussed before. Never respond to something unrelated to the current message.
-2. You have memory of this conversation. Use it naturally — reference earlier topics when relevant.
-3. Plain text only. No **, no ##, no *, no backticks, no markdown.
-4. Use numbered lists for multiple ideas. Use ALL CAPS for section headers in long structured answers.
-5. Be specific. Real video titles, real hooks, real strategies. Never vague advice.
-6. Always complete your full answer. Never cut off mid-response.
+1. ALWAYS respond directly to what the user just said. If they say "hello", greet them warmly. If they ask a follow-up question, answer it in the context of the conversation. Never respond with something unrelated.
+2. You remember the full conversation. Use it naturally.
+3. Plain text only — no **, no ##, no *, no backticks, no markdown ever.
+4. Use numbered lists for multiple ideas. Use ALL CAPS for section headers in long answers.
+5. Be specific — real video titles, real hooks, real strategies.
+6. Always complete your full answer. Never cut off.
 
 You help with: video ideas, titles, hooks, thumbnails, content calendars, channel growth, SEO, competitor research, monetization, audience building.`
 
@@ -36,7 +36,7 @@ function extractIdeas(text: string): string[] {
     .slice(0, 10)
 }
 
-async function gemini(model: string, contents: any[]): Promise<string | null> {
+async function callGemini(model: string, contents: any[]): Promise<string | null> {
   const ctrl = new AbortController()
   const t = setTimeout(() => ctrl.abort(), 28000)
   try {
@@ -47,55 +47,21 @@ async function gemini(model: string, contents: any[]): Promise<string | null> {
         signal: ctrl.signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          systemInstruction: { parts: [{ text: SYSTEM }] },
           contents,
           generationConfig: { temperature: 0.9, maxOutputTokens: 8192, topP: 0.95 },
         }),
       }
     )
     clearTimeout(t)
-    if (!r.ok) return null
+    if (!r.ok) { console.error(model, r.status, await r.text()); return null }
     const d = await r.json()
+    if (d.error) { console.error(model, d.error); return null }
     return d.candidates?.[0]?.content?.parts?.[0]?.text ?? null
-  } catch {
+  } catch (e) {
     clearTimeout(t)
+    console.error(model, e)
     return null
   }
-}
-
-function buildContents(history: { role: string; content: string }[], message: string) {
-  // Convert history to Gemini format (role: user | model)
-  // Only keep last 6 messages (3 exchanges), max 500 chars each
-  const turns = history
-    .filter(m => !m.content?.includes('How can I help you grow'))
-    .slice(-6)
-    .map(m => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content.slice(0, 500) }],
-    }))
-
-  // Add current message
-  turns.push({ role: 'user', parts: [{ text: message }] })
-
-  // Gemini requires strict alternation — fix duplicates
-  const fixed: typeof turns = []
-  for (const turn of turns) {
-    if (fixed.length === 0) {
-      if (turn.role === 'model') continue // must start with user
-      fixed.push(turn)
-    } else if (fixed.at(-1)!.role === turn.role) {
-      fixed.at(-1)!.parts[0].text += '\n' + turn.parts[0].text
-    } else {
-      fixed.push(turn)
-    }
-  }
-
-  // Must end with user
-  if (!fixed.length || fixed.at(-1)!.role !== 'user') {
-    fixed.push({ role: 'user', parts: [{ text: message }] })
-  }
-
-  return fixed
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -104,21 +70,73 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { message, history = [] } = req.body
   if (!message?.trim()) return res.status(400).json({ error: 'message required' })
 
-  const contents = buildContents(history, message)
+  // Build multi-turn contents array
+  // System prompt goes into the first user message + a fake model reply
+  // This is the correct pattern when systemInstruction is not available
+  const contents: any[] = [
+    {
+      role: 'user',
+      parts: [{ text: SYSTEM + '\n\nUnderstood. I am SRankIQ AI. I will follow all rules above.' }],
+    },
+    {
+      role: 'model',
+      parts: [{ text: 'Understood! I am SRankIQ AI, your YouTube growth coach. I will always respond directly to what you say, remember our conversation, use plain text, and give complete specific answers. How can I help you grow?' }],
+    },
+  ]
 
-  // Try best model first, fall back
-  let raw = await gemini('gemini-2.5-flash', contents)
-  if (!raw) raw = await gemini('gemini-1.5-flash', contents)
-  // Last resort: no history at all
-  if (!raw) raw = await gemini('gemini-1.5-flash', [{ role: 'user', parts: [{ text: message }] }])
+  // Add recent history — last 6 messages (3 exchanges), 500 char cap each
+  const recent = history
+    .filter((m: any) => !m.content?.includes('How can I help you grow your YouTube channel today?'))
+    .slice(-6)
+
+  for (const msg of recent) {
+    contents.push({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: (msg.content || '').slice(0, 500) }],
+    })
+  }
+
+  // Add current message
+  contents.push({ role: 'user', parts: [{ text: message }] })
+
+  // Fix alternating turns — Gemini requires strict user/model alternation
+  // Start from index 2 (after our system bootstrap pair)
+  const bootstrap = contents.slice(0, 2)
+  const rest = contents.slice(2)
+  const fixed: any[] = []
+  for (const turn of rest) {
+    if (fixed.length === 0) {
+      if (turn.role === 'model') continue
+      fixed.push(turn)
+    } else if (fixed.at(-1)!.role === turn.role) {
+      fixed.at(-1)!.parts[0].text += '\n' + turn.parts[0].text
+    } else {
+      fixed.push(turn)
+    }
+  }
+  // Ensure ends with user
+  if (!fixed.length || fixed.at(-1)!.role !== 'user') {
+    fixed.push({ role: 'user', parts: [{ text: message }] })
+  }
+
+  const finalContents = [...bootstrap, ...fixed]
+
+  // Try models in order
+  let raw = await callGemini('gemini-2.5-flash', finalContents)
+  if (!raw) raw = await callGemini('gemini-1.5-flash', finalContents)
+  // Last resort: minimal, no history
+  if (!raw) {
+    raw = await callGemini('gemini-1.5-flash', [
+      { role: 'user', parts: [{ text: SYSTEM + '\n\n' + message }] },
+    ])
+  }
 
   if (!raw) {
     return res.status(200).json({
-      reply: 'Sorry, I had a brief issue connecting. Please send your message again!',
+      reply: 'Sorry, I had a brief issue. Please send your message again!',
       ideas: [],
     })
   }
 
-  const reply = clean(raw)
-  return res.status(200).json({ reply, ideas: extractIdeas(reply) })
+  return res.status(200).json({ reply: clean(raw), ideas: extractIdeas(raw) })
 }
