@@ -199,6 +199,13 @@ export default function DashboardLayout({ children, title }: Props) {
               </Link>
             )
           })}
+          {sidebarOpen && (
+            <div style={{ display: 'flex', gap: 12, padding: '0 12px 4px' }}>
+              <Link href="/terms" className="text-[10px] text-muted hover:text-white/60 transition-colors">Terms</Link>
+              <Link href="/privacy" className="text-[10px] text-muted hover:text-white/60 transition-colors">Privacy</Link>
+            </div>
+          )}
+
           <div className="nav-item cursor-pointer" onClick={logout}>
             <div className="w-8 h-8 rounded-lg flex-shrink-0 overflow-hidden">
               <SRankIQLogo size={32} />
