@@ -69,6 +69,14 @@ export default function DashboardLayout({ children, title }: Props) {
   const { profile, logout } = useAuth()
   const { activePlatform, setActivePlatform, isConnected } = usePlatform()
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [searchQ, setSearchQ] = useState('')
+
+  const runSearch = () => {
+    const q = searchQ.trim()
+    if (!q) return
+    setSearchQ('')
+    router.push(`/keywords?q=${encodeURIComponent(q)}`)
+  }
 
   const activePlt = PLATFORMS.find(p => p.code === activePlatform)
 
@@ -242,8 +250,11 @@ export default function DashboardLayout({ children, title }: Props) {
           <div className="flex-1 max-w-md">
             <div className="relative">
               <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={14} />
-              <input type="text" placeholder="Search keywords, channels, topics..."
-                className="inp pl-9 py-2 text-sm" />
+              <input type="text" placeholder="Search any keyword or topic..."
+                className="inp pl-9 py-2 text-sm"
+                value={searchQ}
+                onChange={e => setSearchQ(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && runSearch()} />
             </div>
           </div>
           <div className="flex items-center gap-2 ml-auto">

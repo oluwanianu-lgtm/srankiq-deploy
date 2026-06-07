@@ -225,7 +225,7 @@ export async function getTrendingVideos(regionCode = 'US', maxResults = 24, page
   return { videos, nextPageToken: data.nextPageToken || null }
 }
 
-// ── Real keyword stats from YouTube search ─────────────
+// ── Real keyword stats from YouTube search (deep) ──────
 export async function getKeywordStats(keyword: string) {
   const sRes = await fetch(
     `${YT_BASE}/search?part=snippet&type=video&maxResults=10&q=${encodeURIComponent(keyword)}&key=${API_KEY}`
@@ -237,18 +237,40 @@ export async function getKeywordStats(keyword: string) {
   const ids = (sData.items || []).map((i: any) => i.id.videoId).filter(Boolean).join(',')
 
   let avgViews = 0
-  let recentTopVideos = 0 // top results published in last 90 days
+  let recentTopVideos = 0          // top results published in last 90 days
+  let avgEngagement = 0            // (likes+comments)/views across top results
+  let avgDurationSec = 0
+  let topVideos: any[] = []
+
   if (ids) {
-    const vRes = await fetch(`${YT_BASE}/videos?part=statistics,snippet&id=${ids}&key=${API_KEY}`)
+    const vRes = await fetch(`${YT_BASE}/videos?part=statistics,snippet,contentDetails&id=${ids}&key=${API_KEY}`)
     const vData = await vRes.json()
     const items = vData.items || []
-    const totalViews = items.reduce((s: number, v: any) => s + (parseInt(v.statistics.viewCount) || 0), 0)
-    avgViews = items.length ? Math.round(totalViews / items.length) : 0
     const cutoff = Date.now() - 90 * 24 * 3600 * 1000
-    recentTopVideos = items.filter((v: any) => new Date(v.snippet.publishedAt).getTime() > cutoff).length
+
+    topVideos = items.map((v: any) => ({
+      id: v.id,
+      title: v.snippet.title,
+      channel: v.snippet.channelTitle,
+      thumbnail: v.snippet.thumbnails?.medium?.url || '',
+      publishedAt: v.snippet.publishedAt,
+      views: parseInt(v.statistics.viewCount) || 0,
+      likes: parseInt(v.statistics.likeCount) || 0,
+      comments: parseInt(v.statistics.commentCount) || 0,
+      durationSec: parseDurationSeconds(v.contentDetails?.duration),
+      url: `https://youtube.com/watch?v=${v.id}`,
+    }))
+
+    const totalViews = topVideos.reduce((s, v) => s + v.views, 0)
+    avgViews = topVideos.length ? Math.round(totalViews / topVideos.length) : 0
+    recentTopVideos = topVideos.filter(v => new Date(v.publishedAt).getTime() > cutoff).length
+    const engVals = topVideos.filter(v => v.views > 0).map(v => ((v.likes + v.comments) / v.views) * 100)
+    avgEngagement = engVals.length ? +(engVals.reduce((a, b) => a + b, 0) / engVals.length).toFixed(2) : 0
+    const durVals = topVideos.filter(v => v.durationSec > 0).map(v => v.durationSec)
+    avgDurationSec = durVals.length ? Math.round(durVals.reduce((a, b) => a + b, 0) / durVals.length) : 0
   }
 
-  return { keyword, totalResults, avgViews, recentTopVideos }
+  return { keyword, totalResults, avgViews, recentTopVideos, avgEngagement, avgDurationSec, topVideos }
 }
 
 // ── Autocomplete suggestions (real searches people type) ──
@@ -262,4 +284,69 @@ export async function getAutocomplete(keyword: string): Promise<string[]> {
   } catch {
     return []
   }
+}
+
+// ── Niche/category trending via keyword search ─────────
+// Per the project spec: NEVER use YouTube category IDs (wrong content).
+// Search by curated keywords, recent window, ordered by view count.
+export const CATEGORY_KEYWORDS: Record<string, string> = {
+  'Gaming': 'gaming gameplay video game playthrough',
+  'Music': 'music video song official audio',
+  'Tech': 'technology gadgets AI phone review',
+  'Sports': 'sports highlights football basketball',
+  'News': 'news today breaking news',
+  'Education': 'how to learn tutorial educational',
+  'Entertainment': 'entertainment funny viral trending',
+  'Comedy': 'comedy funny video sketch humor',
+  'Film': 'movie film trailer review',
+  'Fashion': 'fashion style outfit lookbook clothing',
+  'Science': 'science experiment facts discovery',
+  'Food': 'food cooking recipe restaurant',
+  'Travel': 'travel vlog destination adventure',
+  'Finance': 'finance money investing stocks crypto',
+  'Fitness': 'fitness workout gym exercise training',
+}
+
+export async function searchTrendingByCategory(
+  category: string, regionCode = 'US', pageToken?: string
+) {
+  const q = CATEGORY_KEYWORDS[category]
+  if (!q) throw new Error(`Unknown category: ${category}`)
+
+  const publishedAfter = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString()
+  let url = `${YT_BASE}/search?part=snippet&type=video&order=viewCount&maxResults=24` +
+    `&q=${encodeURIComponent(q)}&publishedAfter=${publishedAfter}` +
+    `&regionCode=${regionCode}&key=${API_KEY}`
+  if (pageToken) url += `&pageToken=${pageToken}`
+
+  const sRes = await fetch(url)
+  const sData = await sRes.json()
+  if (sData.error) throw new Error(sData.error.message || 'YouTube search failed')
+
+  const ids = (sData.items || []).map((i: any) => i.id.videoId).filter(Boolean).join(',')
+  if (!ids) return { videos: [], nextPageToken: null }
+
+  const vRes = await fetch(
+    `${YT_BASE}/videos?part=snippet,statistics,contentDetails&id=${ids}&key=${API_KEY}`
+  )
+  const vData = await vRes.json()
+
+  const videos = (vData.items || []).map((v: any) => {
+    const views = parseInt(v.statistics.viewCount) || 0
+    const hoursLive = Math.max(1, (Date.now() - new Date(v.snippet.publishedAt).getTime()) / 36e5)
+    return {
+      id: v.id,
+      title: v.snippet.title,
+      channel: v.snippet.channelTitle,
+      category, // force the selected niche — never mixed up
+      thumbnail: v.snippet.thumbnails?.medium?.url || v.snippet.thumbnails?.high?.url || '',
+      views,
+      viewsPerDay: Math.round((views / hoursLive) * 24),
+      publishedAt: v.snippet.publishedAt,
+      isShort: parseDurationSeconds(v.contentDetails?.duration) <= 61,
+      tags: v.snippet.tags || [],
+    }
+  })
+
+  return { videos, nextPageToken: sData.nextPageToken || null }
 }

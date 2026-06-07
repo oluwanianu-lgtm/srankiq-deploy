@@ -4,7 +4,7 @@
 import type { NextApiResponse } from 'next'
 import { withApiAuth, AuthedRequest } from '../../../lib/serverAuth'
 import { analyzeTrends } from '../../../services/gemini'
-import { getTrendingVideos } from '../../../services/youtube'
+import { getTrendingVideos, searchTrendingByCategory } from '../../../services/youtube'
 
 function formatNum(n: number) {
   if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M'
@@ -15,15 +15,18 @@ function formatNum(n: number) {
 async function handler(req: AuthedRequest, res: NextApiResponse) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
   try {
-    const { platform, region, pageToken } = req.query
+    const { platform, region, pageToken, category } = req.query
     if (!platform) return res.status(400).json({ error: 'platform required' })
 
     const isYouTube = String(platform).toLowerCase().includes('you')
 
     if (isYouTube) {
-      const { videos, nextPageToken } = await getTrendingVideos(
-        (region as string) || 'US', 24, (pageToken as string) || undefined
-      )
+      const useCategory = category && category !== 'All'
+      const { videos, nextPageToken } = useCategory
+        ? await searchTrendingByCategory(
+            category as string, (region as string) || 'US', (pageToken as string) || undefined)
+        : await getTrendingVideos(
+            (region as string) || 'US', 24, (pageToken as string) || undefined)
       const maxVpd = Math.max(...videos.map((v: any) => v.viewsPerDay), 1)
 
       const trends = videos.map((v: any) => ({

@@ -22,6 +22,9 @@ interface Trend {
   videoUrl?: string
 }
 
+const CATEGORIES = ['All', 'Gaming', 'Music', 'Tech', 'Sports', 'News', 'Education',
+  'Entertainment', 'Comedy', 'Film', 'Fashion', 'Science', 'Food', 'Travel', 'Finance', 'Fitness']
+
 const REGIONS = [
   { code: 'US', name: '🇺🇸 United States' },
   { code: 'NG', name: '🇳🇬 Nigeria' },
@@ -56,6 +59,7 @@ function TrendsPage() {
   const [loading, setLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [region, setRegion] = useState('US')
+  const [category, setCategory] = useState('All')
   const [nextPageToken, setNextPageToken] = useState<string | null>(null)
 
   const load = async () => {
@@ -63,7 +67,7 @@ function TrendsPage() {
     setTrends([])
     setNextPageToken(null)
     try {
-      const res = await apiGet(`/api/trends?platform=${activePlt.name}&region=${region}`)
+      const res = await apiGet(`/api/trends?platform=${activePlt.name}&region=${region}&category=${category}`)
       setTrends(res.data.trends || [])
       setNextPageToken(res.data.nextPageToken || null)
     } catch {
@@ -78,7 +82,7 @@ function TrendsPage() {
     setLoadingMore(true)
     try {
       const res = await apiGet(
-        `/api/trends?platform=${activePlt.name}&region=${region}&pageToken=${nextPageToken}`
+        `/api/trends?platform=${activePlt.name}&region=${region}&category=${category}&pageToken=${nextPageToken}`
       )
       setTrends(prev => [...prev, ...(res.data.trends || [])])
       setNextPageToken(res.data.nextPageToken || null)
@@ -89,7 +93,7 @@ function TrendsPage() {
     }
   }
 
-  useEffect(() => { load() }, [activePlatform, region])
+  useEffect(() => { load() }, [activePlatform, region, category])
 
   const useIdea = (t: Trend) => {
     sessionStorage.setItem('srankiq_upload_prefill', JSON.stringify({
@@ -140,6 +144,21 @@ function TrendsPage() {
             </button>
           ))}
         </div>
+
+        {/* Niche filter — results show ONLY the selected niche */}
+        {isYouTube && (
+          <div className="flex gap-2 flex-wrap">
+            {CATEGORIES.map(c => (
+              <button key={c} onClick={() => setCategory(c)}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all
+                  ${category === c
+                    ? 'border-cyan/50 bg-cyan/10 text-cyan'
+                    : 'border-white/10 text-muted hover:text-white hover:border-white/20'}`}>
+                {c}
+              </button>
+            ))}
+          </div>
+        )}
 
         {loading && (
           <div className="card flex flex-col items-center justify-center py-20">
