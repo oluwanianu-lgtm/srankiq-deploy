@@ -20,6 +20,8 @@ export interface PlatformData {
   connected: boolean
   accessToken?: string
   channelId?: string
+  openId?: string
+  likes?: number
   channelName?: string
   subscribers?: number
   followers?: number

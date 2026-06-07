@@ -75,7 +75,7 @@ export default function TikTokCallback() {
         const userData = await userRes.json()
 
         // Save to Firebase via connectPlatform
-        await connectPlatform('tt', {
+        await connectPlatform('tk', {
           connected: true,
           accessToken: access_token,
           openId: open_id,
