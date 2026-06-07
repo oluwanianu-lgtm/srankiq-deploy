@@ -211,9 +211,9 @@ export default function LandingPage() {
           </div>
           <p className="text-xs text-muted">© 2026 SRankIQ. Social Media Ranking Intelligence. All rights reserved.</p>
           <div className="flex gap-6 text-xs text-muted">
-            <a href="#" className="hover:text-white">Privacy</a>
-            <a href="#" className="hover:text-white">Terms</a>
-            <a href="#" className="hover:text-white">Support</a>
+            <Link href="/privacy" className="hover:text-white">Privacy</Link>
+            <Link href="/terms" className="hover:text-white">Terms</Link>
+            <a href="mailto:support@srankiq.com" className="hover:text-white">Support</a>
           </div>
         </div>
       </footer>
