@@ -47,7 +47,7 @@ function TrendsPage() {
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-xl font-bold">🔥 Trend Discovery</h1>
-            <p className="text-muted text-sm">Real-time trending topics powered by Gemini AI</p>
+            <p className="text-muted text-sm"></p>
           </div>
           <div className="flex items-center gap-2">
             <AIBadge />
@@ -87,7 +87,7 @@ function TrendsPage() {
         {loading && (
           <div className="card flex flex-col items-center justify-center py-20">
             <div className="loading-dots flex justify-center mb-4"><span /><span /><span /></div>
-            <p className="text-muted text-sm">Analyzing {activePlt.name} trends with Gemini AI...</p>
+            <p className="text-muted text-sm">Loading...</p>
           </div>
         )}
 

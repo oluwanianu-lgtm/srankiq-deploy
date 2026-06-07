@@ -139,7 +139,7 @@ function KeywordsPage() {
           )}
 
           <p className="text-xs text-muted mt-3">
-            Add up to 10 keywords. Powered by Gemini AI for {activePlt.name} ranking analysis.
+            Add up to 10 keywords. Real search data for {activePlt.name} ranking analysis.
           </p>
         </div>
 
@@ -147,7 +147,7 @@ function KeywordsPage() {
         {loading && (
           <div className="card flex flex-col items-center justify-center py-16">
             <div className="loading-dots flex justify-center mb-4"><span /><span /><span /></div>
-            <p className="text-muted text-sm">Analyzing keyword ranking potential with Gemini AI...</p>
+            <p className="text-muted text-sm">Loading...</p>
           </div>
         )}
 
