@@ -189,6 +189,9 @@ export async function getPublicChannelVideos(channelId: string, maxResults = 15)
     id: v.id,
     title: v.snippet.title,
     publishedAt: v.snippet.publishedAt,
+    thumbnail: v.snippet.thumbnails?.medium?.url || '',
+    url: `https://youtube.com/watch?v=${v.id}`,
+    description: v.snippet.description || '',
     tags: v.snippet.tags || [],
     views: parseInt(v.statistics.viewCount) || 0,
     likes: parseInt(v.statistics.likeCount) || 0,
@@ -389,4 +392,105 @@ export async function searchTopVideos(queryStr: string, regionCode = 'US', pageT
   })
 
   return { videos, nextPageToken: sData.nextPageToken || null }
+}
+
+// ── My Videos: list the signed-in user's uploads (OAuth token) ──
+export async function listMyVideos(accessToken: string, maxResults = 25) {
+  const channelRes = await fetch(
+    `${YT_BASE}/channels?part=contentDetails&mine=true`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  )
+  const channelData = await channelRes.json()
+  if (channelData.error) throw new Error(channelData.error.message || 'YouTube auth failed')
+  const uploadsId = channelData.items?.[0]?.contentDetails?.relatedPlaylists?.uploads
+  if (!uploadsId) return []
+
+  const plRes = await fetch(
+    `${YT_BASE}/playlistItems?part=snippet&playlistId=${uploadsId}&maxResults=${maxResults}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  )
+  const plData = await plRes.json()
+  const ids = plData.items?.map((i: any) => i.snippet.resourceId.videoId).join(',')
+  if (!ids) return []
+
+  const vRes = await fetch(
+    `${YT_BASE}/videos?part=snippet,statistics,contentDetails,status&id=${ids}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  )
+  const vData = await vRes.json()
+  return (vData.items || []).map((v: any) => ({
+    id: v.id,
+    title: v.snippet.title,
+    description: v.snippet.description || '',
+    tags: v.snippet.tags || [],
+    categoryId: v.snippet.categoryId,
+    thumbnail: v.snippet.thumbnails?.medium?.url || '',
+    publishedAt: v.snippet.publishedAt,
+    privacy: v.status?.privacyStatus || 'public',
+    views: parseInt(v.statistics.viewCount) || 0,
+    likes: parseInt(v.statistics.likeCount) || 0,
+    comments: parseInt(v.statistics.commentCount) || 0,
+    url: `https://youtube.com/watch?v=${v.id}`,
+  }))
+}
+
+// ── Update video metadata on YouTube (requires youtube.force-ssl) ──
+export async function updateVideoMetadata(
+  accessToken: string, videoId: string,
+  updates: { title?: string; description?: string; tags?: string[] }
+) {
+  // videos.update requires the FULL snippet including categoryId,
+  // so fetch the current snippet first and merge.
+  const curRes = await fetch(
+    `${YT_BASE}/videos?part=snippet&id=${videoId}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  )
+  const curData = await curRes.json()
+  if (curData.error) throw new Error(curData.error.message || 'Could not load video')
+  const current = curData.items?.[0]?.snippet
+  if (!current) throw new Error('Video not found')
+
+  const snippet = {
+    title: updates.title ?? current.title,
+    description: updates.description ?? current.description,
+    tags: updates.tags ?? current.tags ?? [],
+    categoryId: current.categoryId,
+  }
+
+  const upRes = await fetch(`${YT_BASE}/videos?part=snippet`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ id: videoId, snippet }),
+  })
+  const upData = await upRes.json()
+  if (upData.error) {
+    const msg = upData.error.message || 'Update failed'
+    if (upData.error.code === 401) throw new Error('TOKEN_EXPIRED')
+    if (upData.error.code === 403) throw new Error('PERMISSION — reconnect YouTube in Settings to grant edit access')
+    throw new Error(msg)
+  }
+  return { id: upData.id, title: upData.snippet?.title }
+}
+
+// ── Fetch one public video's full metadata (for analysis) ──
+export async function getVideoDetails(videoId: string) {
+  const r = await fetch(
+    `${YT_BASE}/videos?part=snippet,statistics&id=${videoId}&key=${API_KEY}`
+  )
+  const d = await r.json()
+  const v = d.items?.[0]
+  if (!v) return null
+  return {
+    id: v.id,
+    title: v.snippet.title,
+    description: v.snippet.description || '',
+    tags: v.snippet.tags || [],
+    channel: v.snippet.channelTitle,
+    views: parseInt(v.statistics.viewCount) || 0,
+    likes: parseInt(v.statistics.likeCount) || 0,
+    comments: parseInt(v.statistics.commentCount) || 0,
+  }
 }

@@ -47,6 +47,7 @@ function SettingsPage() {
       scope: [
         'https://www.googleapis.com/auth/youtube.readonly',
         'https://www.googleapis.com/auth/youtube.upload',
+        'https://www.googleapis.com/auth/youtube.force-ssl', // edit video metadata (My Videos)
         'https://www.googleapis.com/auth/yt-analytics.readonly',
       ].join(' '),
       callback: async (resp: any) => {

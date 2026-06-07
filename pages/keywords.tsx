@@ -90,7 +90,7 @@ function KeywordsPage() {
     setResults([])
     try {
       const res = await apiPost('/api/keywords/analyze', { keywords: kws, platform: activePlt.name })
-      setResults(res.data.analysis || [])
+      setResults((res.data.analysis || []).filter((x: any) => x && x.keyword))
       if (res.data.analysis?.length) setExpanded(res.data.analysis[0].keyword)
     } catch (e: any) {
       toast.error(e?.response?.data?.error || 'Analysis failed. Try again.')

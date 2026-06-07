@@ -410,3 +410,38 @@ Based on this real data, return JSON only:
     }
   }
 }
+
+// ── Channel Clone Blueprint ────────────────────────────
+export async function generateChannelBlueprint(data: {
+  name: string
+  subscribers: number
+  niche: string
+  recentTitles: string[]
+  topTags: string[]
+}) {
+  const prompt = `
+A creator wants to start a NEW channel inspired by the successful channel "${data.name}" (${data.subscribers} subscribers, niche: ${data.niche}).
+
+Their recent winning video titles:
+${data.recentTitles.map(t => `- ${t}`).join('\n')}
+Tags they use: ${data.topTags.slice(0, 20).join(', ')}
+
+Create a complete launch blueprint for a NEW channel in this niche (do NOT copy the original — make it inspired but original).
+
+Return JSON only:
+{
+  "suggestedNames": ["name1", "name2", "name3"],
+  "channelDescription": "A compelling 2-3 sentence channel description ready to paste into YouTube",
+  "tagline": "A short channel tagline",
+  "titles": ["10 hooking video titles to launch with — specific, clickable, keyword-aware", "...x10"],
+  "contentPillars": ["3-4 recurring content series/format ideas"],
+  "firstWeekPlan": "2-3 sentences on exactly what to do in week one"
+}
+`
+  const text = await callGemini(prompt)
+  try {
+    return JSON.parse(text.replace(/```json|```/g, '').trim())
+  } catch {
+    throw new Error('Blueprint generation failed — try again')
+  }
+}

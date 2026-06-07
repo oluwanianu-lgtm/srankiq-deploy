@@ -68,7 +68,14 @@ async function handler(req: AuthedRequest, res: NextApiResponse) {
         avgViews: avgViews.toLocaleString(),
         engagementRate,
         postingFrequency,
-        recentVideos: videos.slice(0, 5).map(v => ({ title: v.title, views: v.views })),
+        recentVideos: videos.map(v => {
+          const days = Math.floor((Date.now() - new Date(v.publishedAt).getTime()) / 86400000)
+          const age = days < 1 ? 'today' : days < 30 ? `${days}d ago` : days < 365 ? `${Math.floor(days / 30)}mo ago` : `${Math.floor(days / 365)}y ago`
+          return { id: v.id, title: v.title, views: v.views, likes: v.likes,
+                   thumbnail: (v as any).thumbnail, url: (v as any).url, age }
+        }),
+        channelId: channel.id,
+        niche: niche || 'general',
         ...insights,
       })
     }

@@ -7,7 +7,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { usePlatform, PLATFORMS } from '../../contexts/PlatformContext'
 import { FiHome, FiBarChart2, FiSearch, FiTrendingUp, FiUsers, FiZap,
          FiUpload, FiSettings, FiCreditCard, FiMenu, FiX, FiBell,
-         FiLogOut, FiFileText, FiMessageSquare } from 'react-icons/fi'
+         FiLogOut, FiFileText, FiMessageSquare, FiVideo } from 'react-icons/fi'
 
 // Inline SVG logo — shows everywhere including sidebar
 function SRankIQLogo({ size = 32 }: { size?: number }) {
@@ -54,6 +54,7 @@ const NAV_ITEMS = [
   { href: '/ai-tools', label: 'AI Tools', icon: FiZap },
   { href: '/inspiration', label: 'Get Inspiration', icon: FiMessageSquare },
   { href: '/upload', label: 'Smart Upload', icon: FiUpload },
+  { href: '/videos', label: 'My Videos', icon: FiVideo },
   { href: '/reports', label: 'Reports', icon: FiFileText },
 ]
 
