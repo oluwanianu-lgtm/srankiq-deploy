@@ -1,6 +1,6 @@
 // pages/settings.tsx
-import { apiPost } from '../lib/api'
 import React, { useState } from 'react'
+import { apiPost } from '../lib/api'
 import { motion } from 'framer-motion'
 import DashboardLayout from '../components/layout/DashboardLayout'
 import { withAuth } from '../lib/withAuth'
@@ -8,7 +8,7 @@ import { usePlatform, PLATFORMS } from '../contexts/PlatformContext'
 import { useAuth } from '../contexts/AuthContext'
 import { Spinner } from '../components/ui'
 import toast from 'react-hot-toast'
-import { FiUser, FiLink, FiShield, FiBell, FiCheck, FiExternalLink } from 'react-icons/fi'
+import { FiUser, FiLink, FiShield, FiBell, FiCheck } from 'react-icons/fi'
 
 const TABS = ['Profile', 'Connections', 'Notifications', 'Security']
 
@@ -17,6 +17,7 @@ function SettingsPage() {
   const { platformData, connectPlatform, disconnectPlatform, isConnected } = usePlatform()
   const [tab, setTab] = useState('Profile')
   const [saving, setSaving] = useState(false)
+  const [connecting, setConnecting] = useState(false)
   const [form, setForm] = useState({
     firstName: profile?.firstName || '',
     lastName: profile?.lastName || '',
@@ -33,34 +34,90 @@ function SettingsPage() {
   }
 
   const connectYouTube = () => {
-    const client = (window as any).google?.accounts?.oauth2?.initTokenClient({
+    const google = (window as any).google
+    if (!google?.accounts?.oauth2) {
+      toast.error('Google Sign-In not loaded yet. Please refresh and try again.')
+      return
+    }
+
+    setConnecting(true)
+
+    const client = google.accounts.oauth2.initTokenClient({
       client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
-      scope: 'https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.upload',
+      scope: [
+        'https://www.googleapis.com/auth/youtube.readonly',
+        'https://www.googleapis.com/auth/youtube.upload',
+        'https://www.googleapis.com/auth/yt-analytics.readonly',
+      ].join(' '),
       callback: async (resp: any) => {
-        if (resp.access_token) {
-          try {
-            const res = await apiPost('/api/analytics/youtube', { accessToken: resp.access_token })
-            const data = res.data
-            await connectPlatform('yt', {
-              connected: true,
-              accessToken: resp.access_token,
-              subscribers: data.channel?.subscribers,
-              views: data.channel?.views,
-              videoCount: data.channel?.videos,
-              channelName: data.channel?.name,
-              profilePic: data.channel?.thumbnail,
-            })
-            toast.success(`YouTube connected! ${data.channel?.name}`)
-          } catch { toast.error('Could not fetch channel data') }
+        if (resp.error) {
+          toast.error(`Auth error: ${resp.error}`)
+          setConnecting(false)
+          return
+        }
+        if (!resp.access_token) {
+          toast.error('No access token received')
+          setConnecting(false)
+          return
+        }
+
+        try {
+          const res = await apiPost('/api/analytics/youtube', { accessToken: resp.access_token })
+          const data = res.data
+          const channel = data.channel
+
+          if (!channel) throw new Error('No channel data returned')
+
+          // Save to Firebase — including channelId so dashboard can fetch videos
+          await connectPlatform('yt', {
+            connected: true,
+            accessToken: resp.access_token,
+            channelId: channel.id,           // ← critical: save the real channel ID
+            channelName: channel.name,
+            subscribers: channel.subscribers,
+            views: channel.views,
+            videoCount: channel.videos,
+            profilePic: channel.thumbnail,
+          })
+
+          toast.success(`✅ YouTube connected! Welcome, ${channel.name}`)
+        } catch (err: any) {
+          toast.error(err.message || 'Could not fetch channel data')
+        } finally {
+          setConnecting(false)
         }
       },
+      error_callback: (err: any) => {
+        toast.error('Google auth cancelled')
+        setConnecting(false)
+      },
     })
-    client?.requestAccessToken()
+
+    client.requestAccessToken()
+  }
+
+  const connectTikTok = () => {
+    const clientKey = process.env.NEXT_PUBLIC_TIKTOK_CLIENT_KEY
+    const redirectUri = process.env.NEXT_PUBLIC_TIKTOK_REDIRECT_URI
+    if (!clientKey || !redirectUri) {
+      toast.error('TikTok keys missing — add NEXT_PUBLIC_TIKTOK_CLIENT_KEY to Netlify env vars')
+      return
+    }
+    const state = Math.random().toString(36).substring(2, 18)
+    sessionStorage.setItem('tiktok_oauth_state', state)
+    const authUrl = new URL('https://www.tiktok.com/v2/auth/authorize/')
+    authUrl.searchParams.set('client_key', clientKey)
+    authUrl.searchParams.set('scope', 'user.info.basic,video.list')
+    authUrl.searchParams.set('response_type', 'code')
+    authUrl.searchParams.set('redirect_uri', redirectUri)
+    authUrl.searchParams.set('state', state)
+    window.location.href = authUrl.toString()
   }
 
   const handleConnect = (code: string) => {
     if (code === 'yt') { connectYouTube(); return }
-    toast(`${PLATFORMS.find(p => p.code === code)?.name} connection coming soon!`, { icon: '🚧' })
+    if (code === 'tk') { connectTikTok(); return }
+    toast(`${PLATFORMS.find(p => p.code === code)?.name} OAuth coming soon!`, { icon: '🚧' })
   }
 
   return (
@@ -114,8 +171,7 @@ function SettingsPage() {
               </div>
               <div className="mb-4">
                 <label className="label">Email</label>
-                <input value={profile?.email || ''} disabled
-                  className="inp opacity-50 cursor-not-allowed" />
+                <input value={profile?.email || ''} disabled className="inp opacity-50 cursor-not-allowed" />
               </div>
 
               <button onClick={saveProfile} disabled={saving} className="btn btn-cyan gap-2">
@@ -136,7 +192,7 @@ function SettingsPage() {
               const conn = isConnected(p.code as any)
               const pd = platformData[p.code as any]
               return (
-                <div key={p.code} className={`card flex items-center gap-4 border-l-4`}
+                <div key={p.code} className="card flex items-center gap-4 border-l-4"
                   style={{ borderLeftColor: conn ? p.color : 'transparent' }}>
                   <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl"
                     style={{ background: p.color + '20', color: p.color }}>
@@ -145,8 +201,13 @@ function SettingsPage() {
                   <div className="flex-1">
                     <div className="font-semibold text-white">{p.name}</div>
                     {conn && pd?.channelName ? (
-                      <div className="text-xs text-muted">{pd.channelName} ·{' '}
-                        {pd.subscribers ? `${(pd.subscribers/1000).toFixed(1)}K subscribers` : 'Connected'}
+                      <div className="text-xs text-muted">
+                        {pd.channelName} · {pd.subscribers
+                          ? `${(pd.subscribers / 1000).toFixed(1)}K subscribers`
+                          : 'Connected'}
+                        {pd.channelId && (
+                          <span className="ml-2 text-green text-[10px]">✓ ID saved</span>
+                        )}
                       </div>
                     ) : (
                       <div className="text-xs text-muted">Not connected</div>
@@ -161,9 +222,15 @@ function SettingsPage() {
                       </button>
                     </div>
                   ) : (
-                    <button onClick={() => handleConnect(p.code)}
-                      className="btn btn-ghost btn-sm gap-1.5" style={{ borderColor: p.color + '40', color: p.color }}>
-                      <FiLink size={12} /> Connect
+                    <button
+                      onClick={() => handleConnect(p.code)}
+                      disabled={connecting && p.code === 'yt'}
+                      className="btn btn-ghost btn-sm gap-1.5"
+                      style={{ borderColor: p.color + '40', color: p.color }}>
+                      {connecting && p.code === 'yt'
+                        ? <><Spinner size={12} /> Connecting...</>
+                        : <><FiLink size={12} /> Connect</>
+                      }
                     </button>
                   )}
                 </div>
@@ -214,9 +281,7 @@ function SettingsPage() {
             <div className="card border-red/20">
               <h3 className="font-bold text-red mb-2">Danger Zone</h3>
               <p className="text-muted text-sm mb-4">These actions are permanent and cannot be undone.</p>
-              <button className="btn btn-ghost text-red border-red/20 hover:bg-red/10">
-                Delete Account
-              </button>
+              <button className="btn btn-ghost text-red border-red/20 hover:bg-red/10">Delete Account</button>
             </div>
           </motion.div>
         )}

@@ -197,15 +197,15 @@ export async function getPublicChannelVideos(channelId: string, maxResults = 15)
   }))
 }
 
-// ── Trending videos (real, by region) ─────────────────
-export async function getTrendingVideos(regionCode = 'US', maxResults = 12) {
-  const res = await fetch(
-    `${YT_BASE}/videos?part=snippet,statistics,contentDetails&chart=mostPopular&regionCode=${regionCode}&maxResults=${maxResults}&key=${API_KEY}`
-  )
+// ── Trending videos (real, by region, paginated) ──────
+export async function getTrendingVideos(regionCode = 'US', maxResults = 24, pageToken?: string) {
+  let url = `${YT_BASE}/videos?part=snippet,statistics,contentDetails&chart=mostPopular&regionCode=${regionCode}&maxResults=${maxResults}&key=${API_KEY}`
+  if (pageToken) url += `&pageToken=${pageToken}`
+  const res = await fetch(url)
   const data = await res.json()
   if (data.error) throw new Error(data.error.message || 'YouTube trending fetch failed')
 
-  return (data.items || []).map((v: any) => {
+  const videos = (data.items || []).map((v: any) => {
     const views = parseInt(v.statistics.viewCount) || 0
     const hoursLive = Math.max(1, (Date.now() - new Date(v.snippet.publishedAt).getTime()) / 36e5)
     const viewsPerDay = Math.round((views / hoursLive) * 24)
@@ -214,6 +214,7 @@ export async function getTrendingVideos(regionCode = 'US', maxResults = 12) {
       title: v.snippet.title,
       channel: v.snippet.channelTitle,
       category: CATEGORY_MAP[v.snippet.categoryId] || 'Entertainment',
+      thumbnail: v.snippet.thumbnails?.medium?.url || v.snippet.thumbnails?.high?.url || '',
       views,
       viewsPerDay,
       publishedAt: v.snippet.publishedAt,
@@ -221,6 +222,7 @@ export async function getTrendingVideos(regionCode = 'US', maxResults = 12) {
       tags: v.snippet.tags || [],
     }
   })
+  return { videos, nextPageToken: data.nextPageToken || null }
 }
 
 // ── Real keyword stats from YouTube search ─────────────

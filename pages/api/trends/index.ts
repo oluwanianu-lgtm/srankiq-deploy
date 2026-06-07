@@ -1,6 +1,6 @@
 // pages/api/trends/index.ts
-// YouTube: REAL trending videos from YouTube Data API (by region).
-// Other platforms: AI estimate (labeled) until their APIs are connected.
+// YouTube: real trending videos by region, paginated (pageToken).
+// Other platforms: AI-generated ideas (no public trend APIs yet).
 import type { NextApiResponse } from 'next'
 import { withApiAuth, AuthedRequest } from '../../../lib/serverAuth'
 import { analyzeTrends } from '../../../services/gemini'
@@ -15,37 +15,40 @@ function formatNum(n: number) {
 async function handler(req: AuthedRequest, res: NextApiResponse) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
   try {
-    const { platform, region } = req.query
+    const { platform, region, pageToken } = req.query
     if (!platform) return res.status(400).json({ error: 'platform required' })
 
     const isYouTube = String(platform).toLowerCase().includes('you')
 
     if (isYouTube) {
-      const videos = await getTrendingVideos((region as string) || 'US', 12)
-      const maxVpd = Math.max(...videos.map(v => v.viewsPerDay), 1)
+      const { videos, nextPageToken } = await getTrendingVideos(
+        (region as string) || 'US', 24, (pageToken as string) || undefined
+      )
+      const maxVpd = Math.max(...videos.map((v: any) => v.viewsPerDay), 1)
 
-      const trends = videos.map(v => ({
-        topic: v.title.length > 80 ? v.title.slice(0, 77) + '…' : v.title,
+      const trends = videos.map((v: any) => ({
+        topic: v.title,
         channel: v.channel,
         category: v.category,
+        thumbnail: v.thumbnail,
         viralityScore: Math.max(40, Math.round((v.viewsPerDay / maxVpd) * 100)),
         growth: `${formatNum(v.viewsPerDay)} views/day`,
         totalViews: formatNum(v.views),
-        contentIdea: `Create your own take on this for your niche — it's pulling ${formatNum(v.viewsPerDay)} views/day right now`,
+        contentIdea: `Put your own spin on this for your niche — it's pulling ${formatNum(v.viewsPerDay)} views/day right now`,
         format: v.isShort ? 'Short video' : 'Long video',
         videoUrl: `https://youtube.com/watch?v=${v.id}`,
       }))
 
       return res.status(200).json({
-        dataSource: 'youtube-api', // REAL data
+        dataSource: 'youtube-api',
         trends,
-        summary: `Live trending videos on YouTube (${(region as string) || 'US'}) right now, ranked by view velocity.`,
+        nextPageToken,
+        summary: '',
       })
     }
 
-    // Non-YouTube — AI estimate, labeled
     const result = await analyzeTrends(platform as string)
-    return res.status(200).json({ dataSource: 'ai-estimate', ...result })
+    return res.status(200).json({ dataSource: 'ai-estimate', nextPageToken: null, ...result })
   } catch (err: any) {
     return res.status(500).json({ error: err.message })
   }
