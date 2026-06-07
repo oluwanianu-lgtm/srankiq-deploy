@@ -10,18 +10,17 @@ export default function App({ Component, pageProps }: AppProps) {
   return (
     <>
       <Head>
-        <title>SRankIQ — Social Media Ranking Intelligence</title>
-        <meta name="description" content="AI-powered YouTube growth platform. Analyze competitors, find trending keywords, clone winning channels, and grow faster." />
+        <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-        {/* Favicon — ICO is the ONLY format that reliably shows in browser tabs */}
-        <link rel="shortcut icon" href="/favicon.ico" />
-        <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-
-        <meta name="theme-color" content="#0a0a12" />
+        <meta name="description" content="SRankIQ — The only tool that ranks you on every platform. AI-powered social media SEO, analytics, and optimization." />
+        <meta property="og:title" content="SRankIQ — Social Media Ranking Intelligence" />
+        <meta property="og:description" content="7 platforms. AI content. SEO scanning. Real-time keyword ranking." />
+        <meta property="og:type" content="website" />
+        <meta name="theme-color" content="#030309" />
+        <link rel="icon" href="/favicon.ico" />
+        <title>SRankIQ — Social Media Ranking Intelligence</title>
       </Head>
+
       <AuthProvider>
         <PlatformProvider>
           <Component {...pageProps} />
@@ -29,14 +28,14 @@ export default function App({ Component, pageProps }: AppProps) {
             position="top-right"
             toastOptions={{
               style: {
-                background: '#1a1a2e',
-                color: '#fff',
+                background: '#0e0e24',
+                color: '#f0f0ff',
                 border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: '12px',
+                fontFamily: 'Outfit, sans-serif',
                 fontSize: '13px',
               },
-              success: { iconTheme: { primary: '#00ff88', secondary: '#0d0d0d' } },
-              error: { iconTheme: { primary: '#ff0090', secondary: '#0d0d0d' } },
+              success: { iconTheme: { primary: '#00ff88', secondary: '#000' } },
+              error: { iconTheme: { primary: '#ff3366', secondary: '#fff' } },
             }}
           />
         </PlatformProvider>

@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Deny everything by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Users can only access their own profile and subcollections
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && validProfile();
+      allow update: if isOwner(userId) && notTamperingWithPlan();
+      allow delete: if false; // delete accounts via backend only
+
+      match /{subcollection}/{document=**} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    function isOwner(userId) {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider != 'anonymous'
+        && request.auth.uid == userId;
+    }
+
+    // New profiles must start on the free plan
+    function validProfile() {
+      return request.resource.data.plan == 'starter';
+    }
+
+    // Users cannot upgrade their own plan from the client.
+    // Plan changes must come from your payment webhook (Admin SDK bypasses rules).
+    function notTamperingWithPlan() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['plan']);
+    }
+  }
+}

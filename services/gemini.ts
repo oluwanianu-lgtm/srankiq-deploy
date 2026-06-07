@@ -2,8 +2,8 @@
 // Server-side only — never import this on the client
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY!
-const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1/models'
-const MODEL = 'gemini-2.5-flash'
+const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
+const MODEL = 'gemini-1.5-flash'
 
 interface GeminiResponse {
   candidates: Array<{
@@ -14,6 +14,7 @@ interface GeminiResponse {
 
 async function callGemini(prompt: string, systemPrompt?: string): Promise<string> {
   const messages = []
+
   if (systemPrompt) {
     messages.push({ role: 'user', parts: [{ text: systemPrompt }] })
     messages.push({ role: 'model', parts: [{ text: 'Understood. I will follow those instructions.' }] })
@@ -25,7 +26,11 @@ async function callGemini(prompt: string, systemPrompt?: string): Promise<string
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: messages,
-      generationConfig: { temperature: 0.7, topP: 0.95, maxOutputTokens: 2048 },
+      generationConfig: {
+        temperature: 0.8,
+        topP: 0.95,
+        maxOutputTokens: 2048,
+      },
     }),
   })
 
@@ -38,142 +43,363 @@ async function callGemini(prompt: string, systemPrompt?: string): Promise<string
   return data.candidates[0]?.content?.parts[0]?.text || ''
 }
 
-function parseJSON(text: string, fallback: any) {
-  try {
-    const s = text.indexOf('{'), e = text.lastIndexOf('}')
-    return s > -1 && e > -1 ? JSON.parse(text.substring(s, e + 1)) : fallback
-  } catch { return fallback }
-}
-
 // ── SEO Analysis ──────────────────────────────────────
 export async function analyzeSEO(data: {
-  title: string; description: string; tags: string[]; platform: string
+  title: string
+  description: string
+  tags: string[]
+  platform: string
 }) {
-  const prompt = `Analyze this ${data.platform} content for SEO:
+  const prompt = `
+Analyze this ${data.platform} content for SEO optimization:
+
 Title: "${data.title}"
 Description: "${data.description}"
 Tags: ${data.tags.join(', ')}
 
-Return JSON only (no markdown):
-{"score":<0-100>,"titleScore":<0-100>,"descriptionScore":<0-100>,"tagsScore":<0-100>,"suggestions":["..."],"keywords":["..."],"strengths":["..."],"weaknesses":["..."],"viralScore":<0-100>,"engagementPrediction":"low|medium|high|viral"}`
+Return a JSON object (no markdown) with:
+{
+  "score": <0-100 number>,
+  "titleScore": <0-100>,
+  "descriptionScore": <0-100>,
+  "tagsScore": <0-100>,
+  "suggestions": ["suggestion1", "suggestion2", ...],
+  "keywords": ["keyword1", "keyword2", ...],
+  "strengths": ["strength1", "strength2"],
+  "weaknesses": ["weakness1", "weakness2"],
+  "viralScore": <0-100>,
+  "engagementPrediction": "low|medium|high|viral"
+}
+`
   const text = await callGemini(prompt)
-  return parseJSON(text, { score: 70, suggestions: ['Could not parse analysis'], keywords: [] })
+  try {
+    return JSON.parse(text.replace(/```json|```/g, '').trim())
+  } catch {
+    return { score: 70, suggestions: ['Could not parse analysis'], keywords: [] }
+  }
 }
 
 // ── Title Generator ───────────────────────────────────
 export async function generateTitles(data: {
-  topic: string; platform: string; style: string; keywords: string[]
+  topic: string
+  platform: string
+  style: string
+  keywords: string[]
 }) {
-  const isYouTube = data.platform === 'YouTube'
-  const prompt = `Generate exactly 5 highly optimized ${data.platform} titles for: "${data.topic}"
+  const prompt = `
+Generate 8 highly optimized ${data.platform} video/post titles for the topic: "${data.topic}"
 Style: ${data.style}
-Keywords: ${data.keywords.join(', ')}
+Target keywords: ${data.keywords.join(', ')}
 
-${isYouTube ? `CRITICAL YouTube rules:
-- Each title MUST be between 55-70 characters long (count carefully)
-- Include the main keyword near the start
-- Use numbers, power words, emotional triggers
-- No clickbait — must deliver on the promise
-- Vary styles: how-to, number list, question, controversial, story` : `Rules:
-- Make them platform-optimized and click-worthy
-- Vary the styles`}
+Rules:
+- Optimize for ${data.platform} algorithm
+- Include power words and emotional triggers
+- Make them click-worthy but not clickbait
+- Vary the styles (question, how-to, listicle, emotional, controversial)
 
-Return JSON only (no markdown, no backticks):
-{"titles":[{"title":"...","type":"how-to|list|question|story|emotional","score":<0-100>,"charCount":<number>},{"title":"...","type":"...","score":<0-100>,"charCount":<number>},{"title":"...","type":"...","score":<0-100>,"charCount":<number>},{"title":"...","type":"...","score":<0-100>,"charCount":<number>},{"title":"...","type":"...","score":<0-100>,"charCount":<number>}]}`
+Return JSON only (no markdown):
+{
+  "titles": [
+    {"title": "...", "type": "question|how-to|listicle|emotional|number", "score": <0-100>},
+    ...
+  ]
+}
+`
   const text = await callGemini(prompt)
-  return parseJSON(text, { titles: [{ title: data.topic, type: 'general', score: 70, charCount: data.topic.length }] })
+  try {
+    return JSON.parse(text.replace(/```json|```/g, '').trim())
+  } catch {
+    return { titles: [{ title: data.topic, type: 'general', score: 70 }] }
+  }
 }
 
 // ── Description Generator ─────────────────────────────
 export async function generateDescription(data: {
-  title: string; platform: string; keywords: string[]; tone: string
+  title: string
+  platform: string
+  keywords: string[]
+  tone: string
 }) {
-  const prompt = `Write a fully SEO-optimized ${data.platform} description for:
+  const prompt = `
+Write a fully SEO-optimized ${data.platform} description for:
 Title: "${data.title}"
-Keywords: ${data.keywords.join(', ')}
+Keywords to include: ${data.keywords.join(', ')}
 Tone: ${data.tone}
 
 Requirements:
-- Strong hook first sentence
+- Start with a strong hook sentence
 - Include keywords naturally
-- Clear CTA
-${data.platform === 'YouTube' ? '- Include timestamps placeholder section\n- Add hashtags at the end' : '- Add relevant hashtags'}
+- Add relevant hashtags at the end for ${data.platform}
+- Include a clear CTA
+- Optimize for ${data.platform} search algorithm
+- ${data.platform === 'YouTube' ? 'Include timestamps section placeholder' : ''}
 
-Return plain text only (the actual description, no JSON).`
+Return plain text only (the actual description, no JSON).
+`
   return await callGemini(prompt)
 }
 
 // ── Hashtag Generator ─────────────────────────────────
 export async function generateHashtags(data: {
-  topic: string; platform: string; count: number
+  topic: string
+  platform: string
+  count: number
 }) {
-  const actualCount = 10
-  const prompt = `Generate exactly ${actualCount} optimized hashtags for ${data.platform} about: "${data.topic}"
+  const prompt = `
+Generate ${data.count} optimized hashtags for ${data.platform} on the topic: "${data.topic}"
 
-Mix: 4 high-volume (1M+ posts), 3 medium-volume (100K–1M), 3 niche/specific (under 100K).
-Each hashtag must start with #.
+Mix of:
+- High volume (1M+ posts)
+- Medium volume (100K-1M posts)  
+- Niche/long-tail (under 100K posts)
 
-Return JSON only (no markdown, no backticks):
-{"hashtags":[{"tag":"#example","volume":"high|medium|niche","relevance":<0-100>}]}`
+Return JSON only:
+{
+  "hashtags": [
+    {"tag": "#example", "volume": "high|medium|niche", "relevance": <0-100>},
+    ...
+  ]
+}
+`
   const text = await callGemini(prompt)
-  const result = parseJSON(text, { hashtags: [] })
-  // Ensure exactly 10
-  if (result.hashtags?.length > 10) result.hashtags = result.hashtags.slice(0, 10)
-  return result
+  try {
+    return JSON.parse(text.replace(/```json|```/g, '').trim())
+  } catch {
+    return { hashtags: [] }
+  }
 }
 
 // ── Keyword Analysis ──────────────────────────────────
-export async function analyzeKeywords(data: { keywords: string[]; platform: string }) {
-  const prompt = `Analyze these ${data.platform} keywords: ${data.keywords.join(', ')}
+export async function analyzeKeywords(data: {
+  keywords: string[]
+  platform: string
+}) {
+  const prompt = `
+Analyze these ${data.platform} keywords for ranking potential:
+Keywords: ${data.keywords.join(', ')}
+
+For each keyword provide:
+- Search volume estimate (Low/Medium/High/Very High)
+- Competition level (Easy/Medium/Hard/Very Hard)
+- Ranking percentage chance (0-100)
+- Trend direction (Rising/Stable/Declining)
+- Related keywords suggestions
 
 Return JSON only:
-{"analysis":[{"keyword":"...","volume":"High","competition":"Medium","rankingChance":72,"trend":"Rising","related":["kw1","kw2","kw3"]}]}`
+{
+  "analysis": [
+    {
+      "keyword": "...",
+      "volume": "High",
+      "competition": "Medium",
+      "rankingChance": 72,
+      "trend": "Rising",
+      "related": ["kw1", "kw2", "kw3"]
+    },
+    ...
+  ]
+}
+`
   const text = await callGemini(prompt)
-  return parseJSON(text, { analysis: [] })
+  try {
+    return JSON.parse(text.replace(/```json|```/g, '').trim())
+  } catch {
+    return { analysis: [] }
+  }
 }
 
 // ── Trend Analysis ────────────────────────────────────
 export async function analyzeTrends(platform: string) {
-  const prompt = `List 6 trending topics on ${platform} right now in 2026. Return ONLY valid JSON, no markdown:
-{"trends":[{"topic":"...","category":"...","viralityScore":<0-99>,"growth":"...","contentIdea":"...","format":"Video|Short|Post"}],"summary":"..."}`
+  const prompt = `
+What are the TOP 10 trending topics, keywords, and content ideas on ${platform} RIGHT NOW in 2026?
+
+For each trend include:
+- Trend name/topic
+- Category (Entertainment, Education, Finance, Health, etc.)
+- Virality score (0-100)
+- Growth rate (e.g. "+450% this week")
+- Content idea based on the trend
+- Best content format for this trend
+
+Return JSON only:
+{
+  "trends": [
+    {
+      "topic": "...",
+      "category": "...",
+      "viralityScore": 89,
+      "growth": "+450% this week",
+      "contentIdea": "...",
+      "format": "Short video|Long video|Reel|Post|Story"
+    },
+    ...
+  ],
+  "summary": "Brief overview of what's trending"
+}
+`
+  const text = await callGemini(prompt)
   try {
-    const raw = await callGemini(prompt)
-    return parseJSON(raw, { trends: [], summary: '' })
-  } catch { return { trends: [], summary: '' } }
+    return JSON.parse(text.replace(/```json|```/g, '').trim())
+  } catch {
+    return { trends: [], summary: '' }
+  }
 }
 
 // ── Competitor Analysis ───────────────────────────────
 export async function analyzeCompetitor(data: {
-  channelName: string; platform: string; niche: string
+  channelName: string
+  platform: string
+  niche: string
 }) {
-  const prompt = `Analyze the ${data.platform} account "${data.channelName}" in the "${data.niche}" niche.
+  const prompt = `
+Analyze the ${data.platform} account "${data.channelName}" in the "${data.niche}" niche.
+
+Provide:
+- Estimated performance metrics
+- Content strategy insights
+- Posting frequency analysis
+- Top content types they use
+- Keywords they likely rank for
+- Their strengths and weaknesses
+- Opportunities for competing creators
+
 Return JSON only:
-{"name":"${data.channelName}","platform":"${data.platform}","estimatedSubscribers":"...","avgViews":"...","engagementRate":"...","postingFrequency":"...","contentStrategy":"...","topContentTypes":["..."],"rankingKeywords":["..."],"strengths":["..."],"weaknesses":["..."],"opportunities":["..."]}`
+{
+  "name": "${data.channelName}",
+  "platform": "${data.platform}",
+  "estimatedSubscribers": "...",
+  "avgViews": "...",
+  "engagementRate": "...",
+  "postingFrequency": "...",
+  "contentStrategy": "...",
+  "topContentTypes": ["..."],
+  "rankingKeywords": ["..."],
+  "strengths": ["..."],
+  "weaknesses": ["..."],
+  "opportunities": ["..."]
+}
+`
   const text = await callGemini(prompt)
-  return parseJSON(text, null)
+  try {
+    return JSON.parse(text.replace(/```json|```/g, '').trim())
+  } catch {
+    return null
+  }
 }
 
 // ── Content Ideas Generator ───────────────────────────
 export async function generateContentIdeas(data: {
-  niche: string; platform: string; count: number; audience: string
+  niche: string
+  platform: string
+  count: number
+  audience: string
 }) {
-  const prompt = `Generate ${data.count} viral content ideas for ${data.platform} in "${data.niche}" niche. Target: ${data.audience}
+  const prompt = `
+Generate ${data.count} viral content ideas for ${data.platform} in the "${data.niche}" niche.
+Target audience: ${data.audience}
+
 Return JSON only:
-{"ideas":[{"title":"...","hook":"...","format":"...","viralScore":<0-100>,"difficulty":"Easy|Medium|Hard","estimatedViews":"...","hashtags":["..."],"bestPostingTime":"..."}]}`
+{
+  "ideas": [
+    {
+      "title": "...",
+      "hook": "...",
+      "format": "...",
+      "viralScore": <0-100>,
+      "difficulty": "Easy|Medium|Hard",
+      "estimatedViews": "...",
+      "hashtags": ["..."],
+      "bestPostingTime": "..."
+    },
+    ...
+  ]
+}
+`
   const text = await callGemini(prompt)
-  return parseJSON(text, { ideas: [] })
+  try {
+    return JSON.parse(text.replace(/```json|```/g, '').trim())
+  } catch {
+    return { ideas: [] }
+  }
 }
 
 // ── AI Dashboard Insights ─────────────────────────────
 export async function getDashboardInsights(data: {
-  platform: string; subscribers?: number; views?: number; niche?: string
+  platform: string
+  subscribers?: number
+  views?: number
+  niche?: string
 }) {
-  const prompt = `Give 4 specific actionable insights for a ${data.platform} creator with ${data.subscribers || 0} subscribers and ${data.views || 0} views.
-Focus on growth, algorithm tips, content formats, monetization.
+  const prompt = `
+You are a social media growth expert. Give 4 specific, actionable insights for a creator with:
+- Platform: ${data.platform}
+- ${data.subscribers ? `Subscribers/Followers: ${data.subscribers.toLocaleString()}` : ''}
+- ${data.views ? `Total Views: ${data.views.toLocaleString()}` : ''}
+- ${data.niche ? `Niche: ${data.niche}` : ''}
+
+Focus on: trending content formats, algorithm tips, growth hacks, and monetization opportunities.
+
 Return JSON only:
-{"insights":[{"title":"...","description":"...","priority":"high|medium|low","impact":"..."}]}`
+{
+  "insights": [
+    {"title": "...", "description": "...", "priority": "high|medium|low", "impact": "..."},
+    ...
+  ]
+}
+`
   const text = await callGemini(prompt)
-  return parseJSON(text, { insights: [] })
+  try {
+    return JSON.parse(text.replace(/```json|```/g, '').trim())
+  } catch {
+    return { insights: [] }
+  }
 }
 
 export default callGemini
+
+// ── Competitor Insights from REAL data ────────────────
+// Takes verified YouTube stats and asks Gemini only for the
+// qualitative strategy analysis — numbers stay real.
+export async function generateCompetitorInsights(data: {
+  name: string
+  subscribers: number
+  avgViews: number
+  engagementRate: string
+  postingFrequency: string
+  recentTitles: string[]
+  topTags: string[]
+  niche: string
+}) {
+  const prompt = `
+You are analyzing a REAL YouTube channel using verified data. Do not invent numbers.
+
+Channel: ${data.name}
+Subscribers: ${data.subscribers}
+Average views (last 15 videos): ${data.avgViews}
+Engagement rate: ${data.engagementRate}
+Posting frequency: ${data.postingFrequency}
+Niche: ${data.niche}
+Recent video titles:
+${data.recentTitles.map(t => `- ${t}`).join('\n')}
+Tags they use: ${data.topTags.slice(0, 20).join(', ')}
+
+Based on this real data, return JSON only:
+{
+  "contentStrategy": "2-3 sentence analysis of their content strategy",
+  "topContentTypes": ["type1", "type2", "type3"],
+  "rankingKeywords": ["kw1", "kw2", "kw3", "kw4", "kw5"],
+  "strengths": ["...", "...", "..."],
+  "weaknesses": ["...", "...", "..."],
+  "opportunities": ["...", "...", "..."]
+}
+`
+  const text = await callGemini(prompt)
+  try {
+    return JSON.parse(text.replace(/```json|```/g, '').trim())
+  } catch {
+    return {
+      contentStrategy: 'Analysis unavailable', topContentTypes: [],
+      rankingKeywords: [], strengths: [], weaknesses: [], opportunities: [],
+    }
+  }
+}
