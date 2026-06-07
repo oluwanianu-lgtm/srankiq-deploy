@@ -75,7 +75,13 @@ export default function DashboardLayout({ children, title }: Props) {
     const q = searchQ.trim()
     if (!q) return
     setSearchQ('')
-    router.push(`/keywords?q=${encodeURIComponent(q)}`)
+    // On the Trends page, search shows top videos for the query in place;
+    // everywhere else it runs keyword analysis.
+    if (router.pathname === '/trends') {
+      router.push(`/trends?q=${encodeURIComponent(q)}`)
+    } else {
+      router.push(`/keywords?q=${encodeURIComponent(q)}`)
+    }
   }
 
   const activePlt = PLATFORMS.find(p => p.code === activePlatform)

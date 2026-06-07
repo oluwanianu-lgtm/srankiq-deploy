@@ -4,7 +4,7 @@
 import type { NextApiResponse } from 'next'
 import { withApiAuth, AuthedRequest } from '../../../lib/serverAuth'
 import { analyzeTrends } from '../../../services/gemini'
-import { getTrendingVideos, searchTrendingByCategory } from '../../../services/youtube'
+import { getTrendingVideos, searchTrendingByCategory, searchTopVideos } from '../../../services/youtube'
 
 function formatNum(n: number) {
   if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M'
@@ -15,14 +15,17 @@ function formatNum(n: number) {
 async function handler(req: AuthedRequest, res: NextApiResponse) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
   try {
-    const { platform, region, pageToken, category } = req.query
+    const { platform, region, pageToken, category, q } = req.query
     if (!platform) return res.status(400).json({ error: 'platform required' })
 
     const isYouTube = String(platform).toLowerCase().includes('you')
 
     if (isYouTube) {
       const useCategory = category && category !== 'All'
-      const { videos, nextPageToken } = useCategory
+      const { videos, nextPageToken } = q
+        ? await searchTopVideos(
+            q as string, (region as string) || 'US', (pageToken as string) || undefined)
+        : useCategory
         ? await searchTrendingByCategory(
             category as string, (region as string) || 'US', (pageToken as string) || undefined)
         : await getTrendingVideos(

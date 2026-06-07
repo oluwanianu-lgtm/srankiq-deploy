@@ -350,3 +350,43 @@ export async function searchTrendingByCategory(
 
   return { videos, nextPageToken: sData.nextPageToken || null }
 }
+
+// ── Top videos for any search query (Trends in-page search) ──
+export async function searchTopVideos(queryStr: string, regionCode = 'US', pageToken?: string) {
+  const publishedAfter = new Date(Date.now() - 365 * 24 * 3600 * 1000).toISOString()
+  let url = `${YT_BASE}/search?part=snippet&type=video&order=viewCount&maxResults=24` +
+    `&q=${encodeURIComponent(queryStr)}&publishedAfter=${publishedAfter}` +
+    `&regionCode=${regionCode}&key=${API_KEY}`
+  if (pageToken) url += `&pageToken=${pageToken}`
+
+  const sRes = await fetch(url)
+  const sData = await sRes.json()
+  if (sData.error) throw new Error(sData.error.message || 'YouTube search failed')
+
+  const ids = (sData.items || []).map((i: any) => i.id.videoId).filter(Boolean).join(',')
+  if (!ids) return { videos: [], nextPageToken: null }
+
+  const vRes = await fetch(
+    `${YT_BASE}/videos?part=snippet,statistics,contentDetails&id=${ids}&key=${API_KEY}`
+  )
+  const vData = await vRes.json()
+
+  const videos = (vData.items || []).map((v: any) => {
+    const views = parseInt(v.statistics.viewCount) || 0
+    const hoursLive = Math.max(1, (Date.now() - new Date(v.snippet.publishedAt).getTime()) / 36e5)
+    return {
+      id: v.id,
+      title: v.snippet.title,
+      channel: v.snippet.channelTitle,
+      category: 'Search result',
+      thumbnail: v.snippet.thumbnails?.medium?.url || v.snippet.thumbnails?.high?.url || '',
+      views,
+      viewsPerDay: Math.round((views / hoursLive) * 24),
+      publishedAt: v.snippet.publishedAt,
+      isShort: parseDurationSeconds(v.contentDetails?.duration) <= 61,
+      tags: v.snippet.tags || [],
+    }
+  })
+
+  return { videos, nextPageToken: sData.nextPageToken || null }
+}

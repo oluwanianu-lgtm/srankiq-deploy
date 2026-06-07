@@ -38,7 +38,12 @@ async function handler(req: AuthedRequest, res: NextApiResponse) {
       }
 
       const allTags = videos.flatMap(v => v.tags)
-      const insights = await generateCompetitorInsights({
+      let insights: any = {
+        contentStrategy: '', topContentTypes: [], rankingKeywords: [],
+        strengths: [], weaknesses: [], opportunities: [],
+      }
+      try {
+        insights = await generateCompetitorInsights({
         name: channel.name,
         subscribers: channel.subscribers,
         avgViews,
@@ -47,7 +52,10 @@ async function handler(req: AuthedRequest, res: NextApiResponse) {
         recentTitles: videos.map(v => v.title).slice(0, 10),
         topTags: Array.from(new Set(allTags)),
         niche: niche || 'general',
-      })
+        })
+      } catch (e) {
+        console.error('Competitor insights failed (returning real data anyway):', e)
+      }
 
       return res.status(200).json({
         dataSource: 'youtube-api', // REAL data

@@ -185,7 +185,7 @@ function KeywordsPage() {
         {!loading && best && (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
             className="card border-green/25 bg-green/5 flex items-center gap-4">
-            <div className="text-3xl">{best.verdict.emoji}</div>
+            <div className="text-3xl">{best.verdict?.emoji || '📊'}</div>
             <div className="flex-1">
               <div className="text-xs font-bold uppercase tracking-wider text-green mb-0.5">
                 Best Opportunity
@@ -215,8 +215,8 @@ function KeywordsPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
                     <span className="font-bold text-white text-lg">{r.keyword}</span>
-                    <span className="text-base">{r.verdict.emoji}</span>
-                    <span className="text-xs text-muted">{r.verdict.label}</span>
+                    <span className="text-base">{r.verdict?.emoji || '📊'}</span>
+                    <span className="text-xs text-muted">{r.verdict?.label || 'Analyzed'}</span>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="badge text-[10px] border"
@@ -244,16 +244,16 @@ function KeywordsPage() {
                     className="overflow-hidden">
                     <div className="pt-5 mt-5 border-t border-white/5 space-y-5">
 
-                      <p className="text-sm text-white/70">{r.verdict.detail}</p>
+                      <p className="text-sm text-white/70">{r.verdict?.detail || ''}</p>
 
                       {/* Metric grid */}
                       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                         {[
-                          { label: 'Avg views (top 10)', value: fmt(r.avgTopViews) },
-                          { label: 'Competing videos', value: fmt(r.competingVideos) },
-                          { label: 'Freshness', value: `${r.freshness}% new` },
-                          { label: 'Engagement rate', value: `${r.avgEngagement}%` },
-                          { label: 'Ideal length', value: r.idealLength },
+                          { label: 'Avg views (top 10)', value: fmt(r.avgTopViews || 0) },
+                          { label: 'Competing videos', value: fmt(r.competingVideos || 0) },
+                          { label: 'Freshness', value: `${r.freshness ?? 0}% new` },
+                          { label: 'Engagement rate', value: `${r.avgEngagement ?? 0}%` },
+                          { label: 'Ideal length', value: r.idealLength || '—' },
                         ].map(m => (
                           <div key={m.label} className="bg-surf2 rounded-xl p-3">
                             <div className="font-display text-lg text-white">{m.value}</div>
@@ -263,13 +263,13 @@ function KeywordsPage() {
                       </div>
 
                       {/* Top ranking videos */}
-                      {r.topVideos.length > 0 && (
+                      {(r.topVideos?.length ?? 0) > 0 && (
                         <div>
                           <div className="text-xs font-bold uppercase tracking-wider text-muted mb-2">
                             Who's ranking right now
                           </div>
                           <div className="space-y-2">
-                            {r.topVideos.map((v, vi) => (
+                            {(r.topVideos || []).map((v, vi) => (
                               <a key={v.id} href={v.url} target="_blank" rel="noopener noreferrer"
                                 className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors group">
                                 <span className="text-xs font-bold text-muted w-4">{vi + 1}</span>
@@ -289,13 +289,13 @@ function KeywordsPage() {
                       )}
 
                       {/* AI title ideas */}
-                      {r.titleIdeas.length > 0 && (
+                      {(r.titleIdeas?.length ?? 0) > 0 && (
                         <div>
                           <div className="text-xs font-bold uppercase tracking-wider text-muted mb-2">
                             ✦ Title ideas to beat them
                           </div>
                           <div className="space-y-2">
-                            {r.titleIdeas.map((t, ti) => (
+                            {(r.titleIdeas || []).map((t, ti) => (
                               <div key={ti} className="flex items-center gap-3 bg-surf2 rounded-xl p-3">
                                 <span className="text-sm text-white/85 flex-1">{t}</span>
                                 <button onClick={() => useInUpload(t)}
@@ -309,13 +309,13 @@ function KeywordsPage() {
                       )}
 
                       {/* Related keywords */}
-                      {r.related.length > 0 && (
+                      {(r.related?.length ?? 0) > 0 && (
                         <div>
                           <div className="text-xs font-bold uppercase tracking-wider text-muted mb-2">
                             What people also search
                           </div>
                           <div className="flex flex-wrap gap-2">
-                            {r.related.map(rel => (
+                            {(r.related || []).map(rel => (
                               <button key={rel} onClick={() => addKeyword(rel)}
                                 className="badge-cyan text-xs px-2.5 py-1 hover:bg-cyan/20 transition-colors">
                                 + {rel}

@@ -2,8 +2,9 @@
 // Server-side only — never import this on the client
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY!
-const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
-const MODEL = 'gemini-1.5-flash'
+const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1/models'
+// Try newest first; older models get retired by Google over time
+const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest']
 
 interface GeminiResponse {
   candidates: Array<{
@@ -21,26 +22,32 @@ async function callGemini(prompt: string, systemPrompt?: string): Promise<string
   }
   messages.push({ role: 'user', parts: [{ text: prompt }] })
 
-  const res = await fetch(`${GEMINI_BASE}/${MODEL}:generateContent?key=${GEMINI_API_KEY}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: messages,
-      generationConfig: {
-        temperature: 0.8,
-        topP: 0.95,
-        maxOutputTokens: 2048,
-      },
-    }),
-  })
-
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Gemini API error: ${err}`)
+  let lastErr = ''
+  for (const model of MODELS) {
+    const res = await fetch(`${GEMINI_BASE}/${model}:generateContent?key=${GEMINI_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: messages,
+        generationConfig: {
+          temperature: 0.8,
+          topP: 0.95,
+          maxOutputTokens: 4096,
+        },
+      }),
+    })
+    if (res.ok) {
+      const data: GeminiResponse = await res.json()
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+      if (text) return text
+      lastErr = 'Empty response'
+      continue
+    }
+    lastErr = await res.text()
+    // 404 = model not available on this endpoint — try the next one
+    if (res.status !== 404) break
   }
-
-  const data: GeminiResponse = await res.json()
-  return data.candidates[0]?.content?.parts[0]?.text || ''
+  throw new Error(`AI service error: ${lastErr}`)
 }
 
 // ── SEO Analysis ──────────────────────────────────────

@@ -60,6 +60,17 @@ function TrendsPage() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [region, setRegion] = useState('US')
   const [category, setCategory] = useState('All')
+  const [searchQ, setSearchQ] = useState('')
+
+  // Header search bar lands here with ?q= while on Trends
+  React.useEffect(() => {
+    const q = router.query.q
+    if (typeof q === 'string' && q.trim()) {
+      setSearchQ(q.trim())
+      router.replace('/trends', undefined, { shallow: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router.query.q])
   const [nextPageToken, setNextPageToken] = useState<string | null>(null)
 
   const load = async () => {
@@ -67,7 +78,7 @@ function TrendsPage() {
     setTrends([])
     setNextPageToken(null)
     try {
-      const res = await apiGet(`/api/trends?platform=${activePlt.name}&region=${region}&category=${category}`)
+      const res = await apiGet(`/api/trends?platform=${activePlt.name}&region=${region}&category=${category}${searchQ ? `&q=${encodeURIComponent(searchQ)}` : ''}`)
       setTrends(res.data.trends || [])
       setNextPageToken(res.data.nextPageToken || null)
     } catch {
@@ -82,7 +93,7 @@ function TrendsPage() {
     setLoadingMore(true)
     try {
       const res = await apiGet(
-        `/api/trends?platform=${activePlt.name}&region=${region}&category=${category}&pageToken=${nextPageToken}`
+        `/api/trends?platform=${activePlt.name}&region=${region}&category=${category}${searchQ ? `&q=${encodeURIComponent(searchQ)}` : ''}&pageToken=${nextPageToken}`
       )
       setTrends(prev => [...prev, ...(res.data.trends || [])])
       setNextPageToken(res.data.nextPageToken || null)
@@ -93,7 +104,7 @@ function TrendsPage() {
     }
   }
 
-  useEffect(() => { load() }, [activePlatform, region, category])
+  useEffect(() => { load() }, [activePlatform, region, category, searchQ])
 
   const useIdea = (t: Trend) => {
     sessionStorage.setItem('srankiq_upload_prefill', JSON.stringify({
@@ -113,8 +124,18 @@ function TrendsPage() {
 
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div>
-            <h1 className="text-xl font-bold">🔥 Trend Discovery</h1>
-            <p className="text-muted text-sm">What's trending right now</p>
+            <h1 className="text-xl font-bold">
+              {searchQ ? `🔎 Top videos: "${searchQ}"` : '🔥 Trend Discovery'}
+            </h1>
+            <p className="text-muted text-sm">
+              {searchQ ? 'Best performing videos for your search' : "What's trending right now"}
+            </p>
+            {searchQ && (
+              <button onClick={() => setSearchQ('')}
+                className="text-xs text-cyan hover:underline mt-1">
+                ← Back to trending
+              </button>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {isYouTube && (
@@ -146,7 +167,7 @@ function TrendsPage() {
         </div>
 
         {/* Niche filter — results show ONLY the selected niche */}
-        {isYouTube && (
+        {isYouTube && !searchQ && (
           <div className="flex gap-2 flex-wrap">
             {CATEGORIES.map(c => (
               <button key={c} onClick={() => setCategory(c)}
