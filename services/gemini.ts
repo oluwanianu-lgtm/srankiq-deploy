@@ -13,7 +13,7 @@ interface GeminiResponse {
   }>
 }
 
-async function callGemini(prompt: string, systemPrompt?: string): Promise<string> {
+async function callGemini(prompt: string, systemPrompt?: string, jsonMode = false): Promise<string> {
   const messages = []
 
   if (systemPrompt) {
@@ -33,6 +33,7 @@ async function callGemini(prompt: string, systemPrompt?: string): Promise<string
           temperature: 0.8,
           topP: 0.95,
           maxOutputTokens: 4096,
+          ...(jsonMode ? { responseMimeType: 'application/json' } : {}),
         },
       }),
     })
@@ -78,9 +79,9 @@ Return a JSON object (no markdown) with:
   "engagementPrediction": "low|medium|high|viral"
 }
 `
-  const text = await callGemini(prompt)
+  const text = await callGemini(prompt, undefined, true)
   try {
-    return JSON.parse(text.replace(/```json|```/g, '').trim())
+    return safeJSON(text)
   } catch {
     return { score: 70, suggestions: ['Could not parse analysis'], keywords: [] }
   }
@@ -112,12 +113,16 @@ Return JSON only (no markdown):
   ]
 }
 `
-  const text = await callGemini(prompt)
-  try {
-    return JSON.parse(text.replace(/```json|```/g, '').trim())
-  } catch {
-    return { titles: [{ title: data.topic, type: 'general', score: 70 }] }
-  }
+  const parsed = safeJSON(await callGemini(prompt, undefined, true))
+  if (parsed?.titles?.length) return parsed
+  const base = data.topic
+  return { titles: [
+    { title: `${base} — Everything You Need to Know`, type: 'guide', score: 70 },
+    { title: `How to ${base} (Step by Step)`, type: 'how-to', score: 72 },
+    { title: `${base}: 5 Things Most People Get Wrong`, type: 'listicle', score: 68 },
+    { title: `The Truth About ${base}`, type: 'emotional', score: 66 },
+    { title: `${base} in 2026 — What Actually Works`, type: 'number', score: 71 },
+  ] }
 }
 
 // ── Description Generator ─────────────────────────────
@@ -168,12 +173,14 @@ Return JSON only:
   ]
 }
 `
-  const text = await callGemini(prompt)
-  try {
-    return JSON.parse(text.replace(/```json|```/g, '').trim())
-  } catch {
-    return { hashtags: [] }
-  }
+  const parsed = safeJSON(await callGemini(prompt, undefined, true))
+  if (parsed?.hashtags?.length) return parsed
+  // fallback: build hashtags from the topic words
+  const words = data.topic.toLowerCase().replace(/[^a-z0-9 ]/g, '').split(/\s+/).filter(Boolean)
+  const tags = Array.from(new Set([...words, ...words.map((w, i) => words.slice(i, i + 2).join('')).filter(Boolean)]))
+    .slice(0, data.count || 10)
+    .map(w => ({ tag: '#' + w, popularity: 'medium' }))
+  return { hashtags: tags }
 }
 
 // ── Keyword Analysis ──────────────────────────────────
@@ -207,9 +214,9 @@ Return JSON only:
   ]
 }
 `
-  const text = await callGemini(prompt)
+  const text = await callGemini(prompt, undefined, true)
   try {
-    return JSON.parse(text.replace(/```json|```/g, '').trim())
+    return safeJSON(text)
   } catch {
     return { analysis: [] }
   }
@@ -244,9 +251,9 @@ Return JSON only:
   "summary": "Brief overview of what's trending"
 }
 `
-  const text = await callGemini(prompt)
+  const text = await callGemini(prompt, undefined, true)
   try {
-    return JSON.parse(text.replace(/```json|```/g, '').trim())
+    return safeJSON(text)
   } catch {
     return { trends: [], summary: '' }
   }
@@ -286,9 +293,9 @@ Return JSON only:
   "opportunities": ["..."]
 }
 `
-  const text = await callGemini(prompt)
+  const text = await callGemini(prompt, undefined, true)
   try {
-    return JSON.parse(text.replace(/```json|```/g, '').trim())
+    return safeJSON(text)
   } catch {
     return null
   }
@@ -322,9 +329,9 @@ Return JSON only:
   ]
 }
 `
-  const text = await callGemini(prompt)
+  const text = await callGemini(prompt, undefined, true)
   try {
-    return JSON.parse(text.replace(/```json|```/g, '').trim())
+    return safeJSON(text)
   } catch {
     return { ideas: [] }
   }
@@ -354,12 +361,46 @@ Return JSON only:
   ]
 }
 `
-  const text = await callGemini(prompt)
+  let text = ''
   try {
-    return JSON.parse(text.replace(/```json|```/g, '').trim())
-  } catch {
-    return { insights: [] }
+    text = await callGemini(prompt, undefined, true)
+    const clean = text.replace(/```json|```/g, '').trim()
+    const parsed = JSON.parse(clean.slice(clean.indexOf('{'), clean.lastIndexOf('}') + 1))
+    if (parsed?.insights?.length) return parsed
+  } catch { /* fall through to heuristic insights */ }
+
+  // Always return useful insights so the dashboard never hangs
+  const subs = data.subscribers || 0
+  const insights = [
+    { title: 'Post consistently to train the algorithm',
+      description: `Channels your size grow fastest with a steady 2-3 uploads per week. ${data.platform} rewards regular publishing with more impressions.`,
+      priority: 'high', impact: 'Higher reach' },
+    { title: 'Front-load your keyword in the title',
+      description: 'Put your main search term in the first 3 words of every title — it weighs heavily in ranking and click-through.',
+      priority: 'high', impact: 'Better ranking' },
+    { title: subs < 1000 ? 'Focus on one tight niche to break through' : 'Double down on your best-performing format',
+      description: subs < 1000
+        ? 'Smaller channels rank faster when every video targets the same specific topic. Pick one niche and own it.'
+        : 'Look at your top videos, identify the shared format, and make more of it while the momentum is there.',
+      priority: 'medium', impact: 'Faster growth' },
+    { title: 'Use all 15 tag slots with ranking tags',
+      description: 'Pull tags from the videos already ranking for your topic (the Keywords page surfaces these) and apply a mix of broad and specific terms.',
+      priority: 'medium', impact: 'More discovery' },
+  ]
+  return { insights }
+}
+
+// Tolerant JSON parser: strips fences, extracts the JSON body, never throws on junk
+function safeJSON(text: string): any {
+  const clean = String(text || '').replace(/```json|```/g, '').trim()
+  try { return JSON.parse(clean) } catch { /* try extraction */ }
+  const objStart = clean.indexOf('{'), objEnd = clean.lastIndexOf('}')
+  const arrStart = clean.indexOf('['), arrEnd = clean.lastIndexOf(']')
+  const tryParse = (s: number, e: number) => {
+    if (s !== -1 && e !== -1 && e > s) { try { return JSON.parse(clean.slice(s, e + 1)) } catch { return null } }
+    return null
   }
+  return tryParse(objStart, objEnd) ?? tryParse(arrStart, arrEnd) ?? null
 }
 
 export default callGemini
@@ -400,9 +441,9 @@ Based on this real data, return JSON only:
   "opportunities": ["...", "...", "..."]
 }
 `
-  const text = await callGemini(prompt)
+  const text = await callGemini(prompt, undefined, true)
   try {
-    return JSON.parse(text.replace(/```json|```/g, '').trim())
+    return safeJSON(text)
   } catch {
     return {
       contentStrategy: 'Analysis unavailable', topContentTypes: [],
@@ -438,9 +479,9 @@ Return JSON only:
   "firstWeekPlan": "2-3 sentences on exactly what to do in week one"
 }
 `
-  const text = await callGemini(prompt)
+  const text = await callGemini(prompt, undefined, true)
   try {
-    return JSON.parse(text.replace(/```json|```/g, '').trim())
+    return safeJSON(text)
   } catch {
     throw new Error('Blueprint generation failed — try again')
   }
