@@ -99,7 +99,9 @@ export default function DashboardLayout({ children, title }: Props) {
         {/* Logo */}
         <div className="flex items-center gap-3 p-4 h-16 border-b border-white/5">
           <div className="flex-shrink-0">
-            <SRankIQLogo size={32} />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/logo-icon-cyan.png" alt="SRankIQ" width={36} height={36}
+              style={{ width: 36, height: 36, objectFit: 'contain' }} />
           </div>
           <AnimatePresence>
             {sidebarOpen && (
