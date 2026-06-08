@@ -30,7 +30,24 @@ function VideosPage() {
   const [edits, setEdits] = useState<Record<string, { title: string; description: string; tags: string }>>({})
   const [saving, setSaving] = useState('')
   const [scanning, setScanning] = useState('')
-  const [seoResults, setSeoResults] = useState<Record<string, any>>({})
+  const [suggestions, setSuggestions] = useState<Record<string, any>>({})
+
+  const analyze = async (v: MyVideo) => {
+    setScanning(v.id)
+    try {
+      const res = await apiPost('/api/videos/suggest', {
+        title: v.title, description: v.description, tags: v.tags,
+      })
+      setSuggestions(s => ({ ...s, [v.id]: res.data }))
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Analysis failed')
+    } finally { setScanning('') }
+  }
+
+  const applyToEdit = (vid: string, field: 'title' | 'description' | 'tags', value: string) => {
+    setEdits(x => ({ ...x, [vid]: { ...x[vid], [field]: value } }))
+    toast.success(`${field[0].toUpperCase() + field.slice(1)} applied — review and Save to YouTube`)
+  }
 
   const load = async () => {
     if (!yt?.accessToken) return
@@ -92,18 +109,6 @@ function VideosPage() {
     }
   }
 
-  const scan = async (v: MyVideo) => {
-    setScanning(v.id)
-    try {
-      const res = await apiPost('/api/videos/analyze', { videoId: v.id })
-      setSeoResults(r => ({ ...r, [v.id]: res.data.seo }))
-    } catch {
-      toast.error('Scan failed')
-    } finally {
-      setScanning('')
-    }
-  }
-
   const tagChars = (id: string) => (edits[id]?.tags || '').length
 
   return (
@@ -141,7 +146,7 @@ function VideosPage() {
         {connected && !loading && videos.map(v => {
           const open = expanded === v.id
           const e = edits[v.id]
-          const seo = seoResults[v.id]
+          const sug = suggestions[v.id]
           return (
             <div key={v.id} className="card">
               <div className="flex items-center gap-3 cursor-pointer" onClick={() => startEdit(v)}>
@@ -152,9 +157,9 @@ function VideosPage() {
                   <div className="text-xs text-muted mt-0.5">
                     {fmt(v.views)} views · {fmt(v.likes)} likes · {v.tags.length} tags · {v.privacy}
                   </div>
-                  {seo && (
-                    <div className="text-xs mt-1" style={{ color: seo.score >= 70 ? '#00ff88' : seo.score >= 45 ? '#ffc740' : '#ff3366' }}>
-                      SEO Score: {seo.score}/100
+                  {sug && (
+                    <div className="text-xs mt-1" style={{ color: sug.score >= 70 ? '#00ff88' : sug.score >= 45 ? '#ffc740' : '#ff3366' }}>
+                      SEO Score: {sug.score}/100
                     </div>
                   )}
                 </div>
@@ -197,16 +202,89 @@ function VideosPage() {
                           onChange={ev => setEdits(x => ({ ...x, [v.id]: { ...e, tags: ev.target.value } }))} />
                       </div>
 
-                      {seo?.suggestions?.length > 0 && (
-                        <div className="bg-surf2 rounded-xl p-3">
-                          <div className="text-[10px] font-bold uppercase tracking-wider text-muted mb-2">✦ Suggestions</div>
-                          <ul className="space-y-1">
-                            {seo.suggestions.map((s: string, i: number) => (
-                              <li key={i} className="flex items-start gap-2 text-xs text-white/70">
-                                <span className="text-cyan mt-0.5">→</span> {s}
-                              </li>
-                            ))}
-                          </ul>
+                      {sug && (
+                        <div className="space-y-4">
+                          {/* Health score + what to fix */}
+                          <div className="bg-surf2 rounded-xl p-3">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="text-[10px] font-bold uppercase tracking-wider text-muted">SEO Health</div>
+                              <div className="font-display text-lg"
+                                style={{ color: sug.score >= 70 ? '#00ff88' : sug.score >= 45 ? '#ffc740' : '#ff3366' }}>
+                                {sug.score}/100
+                              </div>
+                            </div>
+                            {sug.fixes?.length > 0 ? (
+                              <>
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-muted mb-2">🔧 What to fix</div>
+                                <ul className="space-y-2">
+                                  {sug.fixes.map((f: any, i: number) => (
+                                    <li key={i} className="flex items-start gap-2">
+                                      <span className={`badge text-[8px] mt-0.5 flex-shrink-0 ${
+                                        f.severity === 'high' ? 'badge-red' : f.severity === 'medium' ? 'badge-gold' : 'badge-cyan'}`}>
+                                        {f.severity}
+                                      </span>
+                                      <div>
+                                        <div className="text-xs font-semibold text-white">{f.label}</div>
+                                        <div className="text-[11px] text-muted">{f.detail}</div>
+                                      </div>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </>
+                            ) : (
+                              <div className="text-xs text-green">✓ No issues found — this video is well optimized!</div>
+                            )}
+                          </div>
+
+                          {/* What to add — AI suggestions with Apply */}
+                          <div className="bg-surf2 rounded-xl p-3 space-y-3">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-muted">✦ What to add</div>
+
+                            {sug.suggestedTitles?.length > 0 && (
+                              <div>
+                                <div className="text-[10px] text-muted mb-1">Suggested titles</div>
+                                <div className="space-y-1.5">
+                                  {sug.suggestedTitles.map((t: string, i: number) => (
+                                    <div key={i} className="flex items-center gap-2">
+                                      <span className="text-xs text-white/85 flex-1">{t}</span>
+                                      <button onClick={() => applyToEdit(v.id, 'title', t)}
+                                        className="btn btn-ghost btn-sm text-[10px] flex-shrink-0">Apply</button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {sug.suggestedDescription && (
+                              <div>
+                                <div className="flex items-center justify-between mb-1">
+                                  <div className="text-[10px] text-muted">Suggested description</div>
+                                  <button onClick={() => applyToEdit(v.id, 'description', sug.suggestedDescription)}
+                                    className="btn btn-ghost btn-sm text-[10px]">Apply</button>
+                                </div>
+                                <div className="text-[11px] text-white/70 bg-surf3 rounded-lg p-2 max-h-24 overflow-y-auto whitespace-pre-wrap">
+                                  {sug.suggestedDescription}
+                                </div>
+                              </div>
+                            )}
+
+                            {sug.suggestedTags?.length > 0 && (
+                              <div>
+                                <div className="flex items-center justify-between mb-1">
+                                  <div className="text-[10px] text-muted">Recommended tags</div>
+                                  <button onClick={() => applyToEdit(v.id, 'tags', sug.suggestedTags.join(', '))}
+                                    className="btn btn-ghost btn-sm text-[10px]">Apply all</button>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {sug.suggestedTags.map((t: string) => (
+                                    <span key={t}
+                                      onClick={() => { navigator.clipboard.writeText(t); toast.success(`Copied "${t}"`) }}
+                                      className="badge-green text-[10px] cursor-pointer hover:brightness-125">{t}</span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       )}
 
@@ -216,9 +294,10 @@ function VideosPage() {
                           {saving === v.id ? <Spinner size={13} /> : <FiSave size={13} />}
                           {saving === v.id ? 'Publishing...' : 'Save to YouTube'}
                         </button>
-                        <button onClick={() => scan(v)} disabled={scanning === v.id}
+                        <button onClick={() => analyze(v)} disabled={scanning === v.id}
                           className="btn btn-ghost gap-1.5">
-                          {scanning === v.id ? <Spinner size={13} /> : <FiZap size={13} />} SEO Scan
+                          {scanning === v.id ? <Spinner size={13} /> : <FiZap size={13} />}
+                          {scanning === v.id ? 'Analyzing...' : 'Analyze & Suggest'}
                         </button>
                       </div>
                     </div>

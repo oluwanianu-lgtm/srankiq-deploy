@@ -38,6 +38,17 @@ function DashboardPage() {
 
   const ytToken = (pData as any)?.accessToken
   const [ytLoading, setYtLoading] = useState(false)
+  const [sugVideo, setSugVideo] = useState<any>(null)
+  const [sugData, setSugData] = useState<any>(null)
+  const [sugLoading, setSugLoading] = useState(false)
+
+  const openSuggest = async (v: any) => {
+    setSugVideo(v); setSugData(null); setSugLoading(true)
+    try {
+      const res = await apiPost('/api/videos/suggest', { title: v.title, description: v.description || '', tags: v.tags || [] })
+      setSugData(res.data)
+    } catch { /* show what we can */ } finally { setSugLoading(false) }
+  }
   const filteredVideos = (videos || []).filter(v =>
     videoTab === 'shorts' ? v.isShort : videoTab === 'videos' ? !v.isShort : false
   )
@@ -143,15 +154,16 @@ function DashboardPage() {
                 filteredVideos.length > 0 ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {filteredVideos.slice(0, 6).map(v => (
-                      <a key={v.id} href={v.url} target="_blank" rel="noopener noreferrer"
-                        className="group rounded-xl overflow-hidden bg-surf2 hover:bg-surf3 transition-colors">
+                      <button key={v.id} onClick={() => openSuggest(v)}
+                        className="group rounded-xl overflow-hidden bg-surf2 hover:bg-surf3 transition-colors text-left">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={v.thumbnail} alt="" className="w-full aspect-video object-cover" />
                         <div className="p-2.5">
                           <div className="text-sm text-white line-clamp-2 group-hover:text-cyan transition-colors">{v.title}</div>
                           <div className="text-xs text-muted mt-1">{fmtN(v.views)} views · {fmtN(v.likes)} likes</div>
+                          <div className="text-[10px] text-cyan mt-1">Tap for SEO fixes →</div>
                         </div>
-                      </a>
+                      </button>
                     ))}
                   </div>
                 ) : (
@@ -203,6 +215,91 @@ function DashboardPage() {
             )
           })}
         </div>
+
+        {/* ── Video SEO suggestion modal ── */}
+        {sugVideo && (
+          <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setSugVideo(null)}>
+            <div className="card max-w-lg w-full max-h-[85vh] overflow-y-auto border-cyan/20"
+              onClick={e => e.stopPropagation()}>
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <div className="min-w-0">
+                  <div className="text-xs text-muted uppercase tracking-wider mb-1">SEO Suggestions</div>
+                  <div className="text-sm font-bold text-white">{sugVideo.title}</div>
+                </div>
+                <button onClick={() => setSugVideo(null)} className="text-muted hover:text-white text-lg">✕</button>
+              </div>
+
+              {sugLoading && (
+                <div className="text-center py-10 text-muted text-sm">
+                  <div className="loading-dots flex justify-center mb-2"><span /><span /><span /></div>
+                  Analyzing this video...
+                </div>
+              )}
+
+              {!sugLoading && sugData && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between bg-surf2 rounded-xl p-3">
+                    <span className="text-xs font-bold uppercase tracking-wider text-muted">SEO Health</span>
+                    <span className="font-display text-lg"
+                      style={{ color: sugData.score >= 70 ? '#00ff88' : sugData.score >= 45 ? '#ffc740' : '#ff3366' }}>
+                      {sugData.score}/100
+                    </span>
+                  </div>
+
+                  {sugData.fixes?.length > 0 ? (
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-muted mb-2">🔧 What to fix</div>
+                      <ul className="space-y-2">
+                        {sugData.fixes.map((f: any, i: number) => (
+                          <li key={i} className="flex items-start gap-2">
+                            <span className={`badge text-[8px] mt-0.5 ${f.severity === 'high' ? 'badge-red' : f.severity === 'medium' ? 'badge-gold' : 'badge-cyan'}`}>{f.severity}</span>
+                            <div>
+                              <div className="text-xs font-semibold text-white">{f.label}</div>
+                              <div className="text-[11px] text-muted">{f.detail}</div>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-green">✓ Well optimized — no major issues.</div>
+                  )}
+
+                  {sugData.suggestedTitles?.length > 0 && (
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-muted mb-2">✦ Better titles</div>
+                      <ul className="space-y-1">
+                        {sugData.suggestedTitles.map((t: string, i: number) => (
+                          <li key={i} className="flex items-start gap-2 text-xs text-white/80">
+                            <span className="text-cyan mt-0.5">→</span> {t}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {sugData.suggestedTags?.length > 0 && (
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-muted mb-2">Recommended tags</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {sugData.suggestedTags.map((t: string) => (
+                          <span key={t}
+                            onClick={() => { navigator.clipboard.writeText(t); toast.success(`Copied "${t}"`) }}
+                            className="badge-green text-[10px] cursor-pointer hover:brightness-125">{t}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <Link href="/videos">
+                    <button className="btn btn-cyan w-full justify-center">Edit & save to YouTube in My Videos →</button>
+                  </Link>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
