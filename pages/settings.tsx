@@ -8,7 +8,7 @@ import { usePlatform, PLATFORMS } from '../contexts/PlatformContext'
 import { useAuth } from '../contexts/AuthContext'
 import { Spinner } from '../components/ui'
 import toast from 'react-hot-toast'
-import { FiUser, FiLink, FiShield, FiBell, FiCheck } from 'react-icons/fi'
+import { FiUser, FiLink, FiShield, FiBell, FiCheck, FiRefreshCw } from 'react-icons/fi'
 
 const TABS = ['Profile', 'Connections', 'Notifications', 'Security']
 
@@ -217,7 +217,22 @@ function SettingsPage() {
                   {conn ? (
                     <div className="flex items-center gap-2">
                       <span className="badge-green text-[10px]">✓ Connected</span>
-                      <button onClick={() => disconnectPlatform(p.code as any)}
+                      {p.code === 'yt' && (
+                        <button onClick={() => handleConnect(p.code)}
+                          disabled={connecting}
+                          className="btn btn-ghost btn-sm gap-1.5"
+                          style={{ borderColor: p.color + '40', color: p.color }}>
+                          {connecting ? <><Spinner size={12} /> Reconnecting...</> : <><FiRefreshCw size={12} /> Reconnect</>}
+                        </button>
+                      )}
+                      <button onClick={async () => {
+                          try {
+                            await disconnectPlatform(p.code as any)
+                            toast.success(`${p.name} disconnected`)
+                          } catch (e: any) {
+                            toast.error(e?.message || 'Could not disconnect')
+                          }
+                        }}
                         className="btn btn-ghost btn-sm text-red/70 hover:text-red">
                         Disconnect
                       </button>

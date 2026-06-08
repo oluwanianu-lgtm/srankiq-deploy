@@ -20,8 +20,6 @@ export interface PlatformData {
   connected: boolean
   accessToken?: string
   channelId?: string
-  openId?: string
-  likes?: number
   channelName?: string
   subscribers?: number
   followers?: number
@@ -30,6 +28,8 @@ export interface PlatformData {
   engagement?: number
   profilePic?: string
   username?: string
+  openId?: string
+  likes?: number
 }
 
 interface PlatformContextType {
@@ -103,6 +103,7 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
     await updateDoc(ref, {
       [`connectedPlatforms.${code}`]: false,
       [`platformTokens.${code}`]: '',
+      [`channelData.${code}`]: {},
     })
   }
 
