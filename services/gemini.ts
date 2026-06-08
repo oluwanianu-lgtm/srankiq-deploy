@@ -22,30 +22,40 @@ async function callGemini(prompt: string, systemPrompt?: string, _jsonMode = fal
   }
   messages.push({ role: 'user', parts: [{ text: prompt }] })
 
+  const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
   let lastErr = ''
   for (const model of MODELS) {
-    const res = await fetch(`${GEMINI_BASE}/${model}:generateContent?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: messages,
-        generationConfig: {
-          temperature: 0.8,
-          topP: 0.95,
-          maxOutputTokens: 4096,
-        },
-      }),
-    })
-    if (res.ok) {
-      const data: GeminiResponse = await res.json()
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
-      if (text) return text
-      lastErr = 'Empty response'
-      continue
+    // Retry the same model on transient overload (503/429/500) before moving on
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const res = await fetch(`${GEMINI_BASE}/${model}:generateContent?key=${GEMINI_API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: messages,
+          generationConfig: {
+            temperature: 0.8,
+            topP: 0.95,
+            maxOutputTokens: 4096,
+          },
+        }),
+      })
+      if (res.ok) {
+        const data: GeminiResponse = await res.json()
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+        if (text) return text
+        lastErr = 'Empty response'
+        break // empty — try next model
+      }
+      lastErr = await res.text()
+      const transient = res.status === 503 || res.status === 429 || res.status === 500
+      if (transient && attempt < 2) {
+        await sleep(700 * (attempt + 1)) // 0.7s, then 1.4s
+        continue // retry same model
+      }
+      // 404 or exhausted transient retries → try next model; hard 4xx → stop
+      if (res.status === 404 || transient) break
+      throw new Error(`AI service error: ${lastErr}`)
     }
-    lastErr = await res.text()
-    // 404 = model not available on this endpoint — try the next one
-    if (res.status !== 404) break
   }
   throw new Error(`AI service error: ${lastErr}`)
 }

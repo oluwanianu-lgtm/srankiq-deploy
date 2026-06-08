@@ -63,10 +63,10 @@ export default function LoginPage() {
             THE ONLY TOOL THAT <span className="grad-text">RANKS YOU</span> ON EVERY PLATFORM
           </h2>
           <p className="text-white/50 mb-10 leading-relaxed">
-            7 platforms. Gemini AI content. Real-time SEO scanning. Live keyword ranking percentages.
+            7 platforms. AI-generated content. Real-time SEO scanning. Live keyword ranking percentages.
           </p>
           <div className="space-y-3">
-            {['Real YouTube subscriber & view counts', 'Gemini AI title & description generator',
+            {['Real YouTube subscriber & view counts', 'AI title & description generator',
               'SEO scan before every upload', 'Competitor tracking & analysis'].map(f => (
               <div key={f} className="flex items-center gap-3 text-sm text-white/70">
                 <div className="w-5 h-5 rounded-full bg-cyan/20 border border-cyan/30

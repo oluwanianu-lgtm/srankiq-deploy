@@ -4,7 +4,6 @@ import React, { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import DashboardLayout from '../components/layout/DashboardLayout'
 import { StatCard, SectionHeader, AIBadge, EmptyState, Skeleton, RankBadge } from '../components/ui'
-import { ViewsChart } from '../components/charts/AnalyticsChart'
 import { withAuth } from '../lib/withAuth'
 import { useAuth } from '../contexts/AuthContext'
 import { usePlatform, PLATFORMS } from '../contexts/PlatformContext'
@@ -12,18 +11,16 @@ import { FiTrendingUp, FiYoutube, FiLink, FiPlay } from 'react-icons/fi'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 
-// Generate demo chart data
-function genChartData(days = 30) {
-  return Array.from({ length: days }, (_, i) => {
-    const d = new Date()
-    d.setDate(d.getDate() - (days - i))
-    return {
-      date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      views: Math.floor(Math.random() * 50000 + 10000 + i * 1000),
-      subscribers: Math.floor(Math.random() * 500 + 50 + i * 20),
-    }
-  })
-}
+const fmtN = (n: number) =>
+  n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'K' : String(n || 0)
+
+const VIDEO_TABS = [
+  { key: 'videos', label: 'Videos' },
+  { key: 'shorts', label: 'Shorts' },
+  { key: 'live', label: 'Live' },
+  { key: 'playlists', label: 'Playlists' },
+] as const
+type VideoTab = typeof VIDEO_TABS[number]['key']
 
 function DashboardPage() {
   const { profile } = useAuth()
@@ -35,7 +32,18 @@ function DashboardPage() {
   const [insights, setInsights] = useState<any[]>([])
   const [trends, setTrends] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [chartData] = useState(genChartData())
+  const [channel, setChannel] = useState<any>(null)
+  const [videos, setVideos] = useState<any[]>([])
+  const [videoTab, setVideoTab] = useState<VideoTab>('videos')
+
+  const ytToken = (pData as any)?.accessToken
+  const filteredVideos = (videos || []).filter(v =>
+    videoTab === 'shorts' ? v.isShort : videoTab === 'videos' ? !v.isShort : false
+  )
+  const realAvgViews = videos.length
+    ? Math.round(videos.reduce((s, v) => s + (v.views || 0), 0) / videos.length) : 0
+  const realEngagement = videos.length
+    ? (videos.reduce((s, v) => s + ((v.likes + v.comments) / Math.max(1, v.views)), 0) / videos.length * 100) : 0
 
   const greeting = (() => {
     const h = new Date().getHours()
@@ -57,6 +65,13 @@ function DashboardPage() {
         ])
         setInsights(insRes.data.insights?.slice(0, 4) || [])
         setTrends(trendRes.data.trends?.slice(0, 5) || [])
+
+        // Real connected-channel identity + uploads
+        if (ytToken) {
+          apiPost('/api/analytics/youtube', { accessToken: ytToken })
+            .then(r => { setChannel(r.data.channel); setVideos(r.data.videos || []) })
+            .catch(() => {})
+        }
       } finally {
         setLoading(false)
       }
@@ -78,15 +93,83 @@ function DashboardPage() {
               {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </p>
           </div>
-          <div className="flex gap-2">
-            <Link href="/keywords">
-              <button className="btn btn-ghost btn-sm gap-1.5">🔍 Research</button>
-            </Link>
-            <Link href="/ai-tools">
-              <button className="btn btn-cyan btn-sm gap-1.5">✦ AI Generate</button>
-            </Link>
-          </div>
         </div>
+
+        {/* ── Connected channel box (real identity) ── */}
+        {connected && channel && (
+          <div className="card relative overflow-hidden border-b-2" style={{ borderBottomColor: '#ff0000' }}>
+            <div className="flex items-center gap-4">
+              {channel.thumbnail ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={channel.thumbnail} alt={channel.name}
+                  className="w-16 h-16 rounded-full object-cover border-2 border-white/10" />
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-surf3 flex items-center justify-center text-2xl">📺</div>
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-bold text-white truncate">{channel.name}</h2>
+                  <span className="badge-green text-[9px] flex items-center gap-1">● LIVE</span>
+                </div>
+                <div className="text-sm text-muted">
+                  {channel.customUrl ? channel.customUrl : ''} · {fmtN(channel.subscribers)} subscribers · {channel.videos} videos
+                </div>
+              </div>
+              <a href={channel.customUrl ? `https://youtube.com/${channel.customUrl}` : `https://youtube.com/channel/${channel.id}`}
+                target="_blank" rel="noopener noreferrer"
+                className="btn btn-ghost btn-sm hidden sm:flex">View channel ↗</a>
+            </div>
+
+            {/* YouTube-style tab row */}
+            <div className="flex items-center gap-1 mt-4 border-b border-white/8 -mx-5 px-5">
+              {VIDEO_TABS.map(t => (
+                <button key={t.key} onClick={() => setVideoTab(t.key)}
+                  className={`px-4 py-2 text-sm font-semibold transition-colors relative
+                    ${videoTab === t.key ? 'text-white' : 'text-muted hover:text-white/80'}`}>
+                  {t.label}
+                  {videoTab === t.key && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-white rounded-full" />
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* Filtered content */}
+            <div className="pt-4">
+              {(videoTab === 'videos' || videoTab === 'shorts') && (
+                filteredVideos.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {filteredVideos.slice(0, 6).map(v => (
+                      <a key={v.id} href={v.url} target="_blank" rel="noopener noreferrer"
+                        className="group rounded-xl overflow-hidden bg-surf2 hover:bg-surf3 transition-colors">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={v.thumbnail} alt="" className="w-full aspect-video object-cover" />
+                        <div className="p-2.5">
+                          <div className="text-sm text-white line-clamp-2 group-hover:text-cyan transition-colors">{v.title}</div>
+                          <div className="text-xs text-muted mt-1">{fmtN(v.views)} views · {fmtN(v.likes)} likes</div>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted text-sm">
+                    No {videoTab} found on this channel yet.
+                  </div>
+                )
+              )}
+              {videoTab === 'live' && (
+                <div className="text-center py-8 text-muted text-sm">
+                  Live streams appear here when you go live on YouTube.
+                </div>
+              )}
+              {videoTab === 'playlists' && (
+                <div className="text-center py-8 text-muted text-sm">
+                  Playlist management is coming soon.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Platform Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -121,14 +204,15 @@ function DashboardPage() {
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           <StatCard label="Subscribers" loading={loading}
-            value={connected && pData?.subscribers ? `${(pData.subscribers / 1000).toFixed(1)}K` : '—'}
-            change={connected ? '+2.1% this week' : undefined} color="#00f5ff" />
+            value={connected && channel ? fmtN(channel.subscribers) : '—'} color="#00f5ff" />
           <StatCard label="Total Views" loading={loading}
-            value={connected && pData?.views ? `${(pData.views / 1000000).toFixed(1)}M` : '—'}
-            change={connected ? '+18% this month' : undefined} color="#00ff88" />
-          <StatCard label="SEO Score" loading={loading} value="78" change="+5 this week" color="#ffc740" />
-          <StatCard label="Keywords Ranked" loading={loading} value="247" change="+31 new" color="#ff0090" />
-          <StatCard label="Trending Topics" loading={loading} value="18" change="+6 this week" color="#b4ff00" />
+            value={connected && channel ? fmtN(channel.views) : '—'} color="#00ff88" />
+          <StatCard label="Videos" loading={loading}
+            value={connected && channel ? String(channel.videos) : '—'} color="#ffc740" />
+          <StatCard label="Avg Views / Video" loading={loading}
+            value={connected && videos.length ? fmtN(realAvgViews) : '—'} color="#ff0090" />
+          <StatCard label="Avg Engagement" loading={loading}
+            value={connected && videos.length ? `${realEngagement.toFixed(1)}%` : '—'} color="#b4ff00" />
         </div>
 
         {/* Connect CTA if not connected */}
@@ -152,8 +236,30 @@ function DashboardPage() {
         {/* Charts Row */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <div className="card lg:col-span-2">
-            <SectionHeader title="📈 Views & Subscribers" subtitle="Last 30 days" />
-            <ViewsChart data={chartData} />
+            <SectionHeader title="📊 Your Top Videos" subtitle="By views — real data from your channel" />
+            {connected && videos.length > 0 ? (
+              <div className="space-y-2.5 mt-2">
+                {[...videos].sort((a, b) => b.views - a.views).slice(0, 6).map((v, i) => {
+                  const max = Math.max(...videos.map(x => x.views), 1)
+                  return (
+                    <div key={v.id} className="flex items-center gap-3">
+                      <span className="text-xs font-bold text-muted w-4">{i + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm text-white truncate mb-1">{v.title}</div>
+                        <div className="h-2 rounded-full bg-surf3 overflow-hidden">
+                          <div className="h-full rounded-full"
+                            style={{ width: `${(v.views / max) * 100}%`, background: 'linear-gradient(90deg,#00f5ff,#00ff88)' }} />
+                        </div>
+                      </div>
+                      <span className="text-xs text-muted w-16 text-right">{fmtN(v.views)}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <EmptyState icon="📊" title={connected ? 'Loading your videos...' : 'Connect YouTube'}
+                description={connected ? 'Fetching real performance data' : 'Link your channel to see real video stats'} />
+            )}
           </div>
           <div className="card">
             <SectionHeader title="🔥 Trending Now"
@@ -191,7 +297,7 @@ function DashboardPage() {
                           border border-cyan/20 flex items-center justify-center text-cyan font-bold">✦</div>
             <div>
               <div className="font-bold text-white">AI {activePlt.name} Insights</div>
-              <div className="text-xs text-muted">Powered by Gemini AI — updated in real-time</div>
+              <div className="text-xs text-muted">Updated in real-time</div>
             </div>
             <AIBadge />
           </div>
