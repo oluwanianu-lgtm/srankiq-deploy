@@ -346,8 +346,10 @@ function KeywordsPage() {
                           <div className="space-y-2">
                             {(r.titleIdeas || []).map((t, ti) => (
                               <div key={ti} className="flex items-center gap-3 bg-surf2 rounded-xl p-3">
-                                <span className="text-sm text-white/85 flex-1">{t}</span>
-                                <button onClick={() => useInUpload(t)}
+                                <span className="text-sm text-white/85 flex-1">
+                                  {typeof t === 'string' ? t : (t as any)?.title || ''}
+                                </span>
+                                <button onClick={() => useInUpload(typeof t === 'string' ? t : (t as any)?.title || '')}
                                   className="btn btn-cyan btn-sm gap-1 flex-shrink-0">
                                   <FiUpload size={11} /> Use
                                 </button>

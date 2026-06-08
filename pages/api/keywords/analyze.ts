@@ -98,7 +98,11 @@ async function handler(req: AuthedRequest, res: NextApiResponse) {
           topic: `videos that could rank for these search terms: ${capped.join('; ')}`,
           platform: 'YouTube', style: 'high click-through, keyword-first', keywords: capped,
         })
-        const titles: string[] = result?.titles || []
+        // generateTitles returns objects {title, type, score} — flatten to strings
+        const rawTitles: any[] = result?.titles || []
+        const titles: string[] = rawTitles
+          .map(t => (typeof t === 'string' ? t : t?.title))
+          .filter((t): t is string => Boolean(t))
         capped.forEach((kw, idx) => {
           titleIdeas[kw] = titles.slice(idx * 2, idx * 2 + 2)
         })
