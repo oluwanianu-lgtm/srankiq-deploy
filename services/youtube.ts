@@ -655,3 +655,35 @@ export async function analyzeNiche(seed: string, regionCode = 'US') {
     competitionScore, demandScore, opportunityScore, verdict, topVideos,
   }
 }
+
+// ── Batch video + channel stats for inline search-result injection ──
+export async function batchVideoStats(videoIds: string[]) {
+  if (!videoIds.length) return []
+  const vRes = await fetch(`${YT_BASE}/videos?part=snippet,statistics,contentDetails&id=${videoIds.join(',')}&key=${API_KEY}`)
+  const vData = await vRes.json()
+  if (vData.error) throw new Error(vData.error.message || 'batch failed')
+  const vids = vData.items || []
+  // channel subs
+  const chIds = Array.from(new Set(vids.map((v: any) => v.snippet.channelId))).slice(0, 50)
+  const subsByCh: Record<string, number> = {}
+  if (chIds.length) {
+    const cRes = await fetch(`${YT_BASE}/channels?part=statistics&id=${chIds.join(',')}&key=${API_KEY}`)
+    const cData = await cRes.json()
+    ;(cData.items || []).forEach((c: any) => { subsByCh[c.id] = parseInt(c.statistics?.subscriberCount) || 0 })
+  }
+  return vids.map((v: any) => {
+    const views = parseInt(v.statistics?.viewCount) || 0
+    const hours = Math.max(1, (Date.now() - new Date(v.snippet.publishedAt).getTime()) / 36e5)
+    const vph = Math.round(views / hours)
+    const subs = subsByCh[v.snippet.channelId] || 0
+    // outlier multiplier — views vs a typical baseline for the channel size
+    const baseline = Math.max(1000, subs * 0.1)
+    const outlier = +(views / baseline).toFixed(1)
+    return {
+      id: v.id, views, vph, subs,
+      tags: v.snippet.tags || [], tagCount: (v.snippet.tags || []).length,
+      outlier: Math.min(99, outlier),
+      ageDays: Math.round(hours / 24),
+    }
+  })
+}
