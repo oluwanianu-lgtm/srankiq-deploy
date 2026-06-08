@@ -3,6 +3,7 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 import {
   resolveChannel, getPublicChannelVideos, searchTopVideos, getVideoDetails, batchVideoStats,
 } from '../../../services/youtube'
+import { callGemini, safeJSON } from '../../../services/gemini'
 
 function cors(res: NextApiResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -139,6 +140,47 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const ids = String(req.query.ids || '').split(',').filter(Boolean).slice(0, 20)
       if (!ids.length) return res.status(400).json({ error: 'ids required' })
       return res.status(200).json({ videos: await batchVideoStats(ids) })
+    }
+
+    if (action === 'suggestNiche') {
+      // AI niche finder — user describes their interest, we suggest niches + keywords
+      const desc = String(req.query.desc || '')
+      if (!desc) return res.status(400).json({ error: 'desc required' })
+      let result: any = { niches: [] }
+      try {
+        const raw = await callGemini(
+          `A new YouTuber says: "${desc}". Suggest 4 specific, monetizable YouTube niches for them. ` +
+          `For each niche give: a short name, a one-line reason it's profitable, an estimated RPM tier (low/medium/high), ` +
+          `and 4 search keywords they should research. Return ONLY valid JSON: ` +
+          `[{"niche":"...","reason":"...","rpm":"high","keywords":["..","..","..",".."]}]. No commentary.`
+        )
+        const parsed = safeJSON(raw)
+        if (Array.isArray(parsed)) result.niches = parsed.slice(0, 4)
+      } catch { /* fallback below */ }
+      if (!result.niches.length) {
+        result.niches = [{ niche: desc, reason: 'Based on your interest', rpm: 'medium',
+          keywords: [desc, `${desc} for beginners`, `best ${desc}`, `how to ${desc}`] }]
+      }
+      return res.status(200).json(result)
+    }
+
+    if (action === 'channelNiche') {
+      // auto-detect a channel's niche from its recent video tags/titles
+      const id = String(req.query.id || '')
+      if (!id) return res.status(400).json({ error: 'id required' })
+      const vids = await getPublicChannelVideos(id, 15)
+      const freq: Record<string, number> = {}
+      vids.forEach((v: any) => (v.tags || []).forEach((t: string) => { const k = t.toLowerCase().trim(); if (k.length > 2) freq[k] = (freq[k] || 0) + 1 }))
+      const topTags = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([t]) => t)
+      let niche = topTags[0] || ''
+      try {
+        const raw = await callGemini(
+          `These are a YouTube channel's most common video tags: ${topTags.join(', ')}. ` +
+          `In 2-4 words, what niche is this channel? Return ONLY the niche name, nothing else.`
+        )
+        if (raw && raw.trim().length < 40) niche = raw.trim().replace(/["\n.]/g, '')
+      } catch {}
+      return res.status(200).json({ niche, topTags })
     }
 
     return res.status(400).json({ error: 'unknown action' })
