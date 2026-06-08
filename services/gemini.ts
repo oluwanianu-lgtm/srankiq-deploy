@@ -13,7 +13,7 @@ interface GeminiResponse {
   }>
 }
 
-async function callGemini(prompt: string, systemPrompt?: string, jsonMode = false): Promise<string> {
+async function callGemini(prompt: string, systemPrompt?: string, _jsonMode = false): Promise<string> {
   const messages = []
 
   if (systemPrompt) {
@@ -33,7 +33,6 @@ async function callGemini(prompt: string, systemPrompt?: string, jsonMode = fals
           temperature: 0.8,
           topP: 0.95,
           maxOutputTokens: 4096,
-          ...(jsonMode ? { responseMimeType: 'application/json' } : {}),
         },
       }),
     })
