@@ -7,7 +7,7 @@ import { Spinner, EmptyState } from '../components/ui'
 import { apiPost } from '../lib/api'
 import toast from 'react-hot-toast'
 import {
-  FiUpload, FiCheck, FiZap, FiCopy, FiX, FiChevronDown, FiHelpCircle,
+  FiUpload, FiCheck, FiZap, FiCopy, FiX, FiChevronDown, FiImage,
 } from 'react-icons/fi'
 import { useAuth } from '../contexts/AuthContext'
 import { saveUpload } from '../services/firestore'
@@ -57,6 +57,36 @@ function UploadPage() {
   const [dragOver, setDragOver] = useState(false)
   const [tagInput, setTagInput] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  const thumbRef = useRef<HTMLInputElement>(null)
+  const [thumbFile, setThumbFile] = useState<File | null>(null)
+  const [thumbPreview, setThumbPreview] = useState<string>('')
+
+  const onThumbPicked = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    if (!f) return
+    if (f.size > 2 * 1024 * 1024) { toast.error('Thumbnail must be under 2MB'); return }
+    setThumbFile(f)
+    setThumbPreview(URL.createObjectURL(f))
+  }
+
+  // Upload custom thumbnail to YouTube (thumbnails.set — needs verified account)
+  const uploadThumbnail = async (vid: string) => {
+    if (!thumbFile || !accessToken) return
+    try {
+      const res = await fetch(
+        `https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=${vid}&uploadType=media`,
+        { method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': thumbFile.type }, body: thumbFile }
+      )
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({} as any))
+        if (e.error?.errors?.[0]?.reason === 'unverifiedAccount' || /unverified/i.test(e.error?.message || ''))
+          toast.error('Custom thumbnail skipped — your YouTube account must be verified to set thumbnails')
+        else toast.error('Thumbnail upload skipped: ' + (e.error?.message || 'failed'))
+        return false
+      }
+      return true
+    } catch { toast.error('Thumbnail upload failed'); return false }
+  }
 
   const ytConnected = isConnected('yt' as any)
   const ytData = platformData?.['yt' as any] as any
@@ -195,6 +225,7 @@ function UploadPage() {
           youtubeVideoId: videoId, youtubeUrl: `https://youtube.com/watch?v=${videoId}`,
         }).catch(() => {})
       }
+      if (thumbFile) { await uploadThumbnail(videoId) }
       toast.success(`Published as ${form.privacyStatus}! 🎉`)
       router.push('/dashboard')
     } catch (err: any) {
@@ -339,10 +370,25 @@ function UploadPage() {
                   {/* Thumbnail */}
                   <div>
                     <h4 className="text-sm font-bold text-white mb-1">Thumbnail</h4>
-                    <p className="text-xs text-muted mb-2">Set a thumbnail that stands out and draws viewers' attention.</p>
-                    <div className="flex items-center gap-2 bg-surf2 rounded-lg p-3 text-xs text-muted">
-                      <FiHelpCircle size={14} /> Thumbnails can be changed in YouTube once processing completes.
+                    <p className="text-xs text-muted mb-2">Set a thumbnail that stands out and draws viewers' attention. Upload a .jpg or .png (1280×720 recommended, under 2MB).</p>
+                    <div className="flex items-center gap-3">
+                      <button onClick={() => thumbRef.current?.click()}
+                        className="w-40 aspect-video rounded-lg border-2 border-dashed border-white/15 hover:border-cyan/50
+                                   flex flex-col items-center justify-center gap-1 transition-colors flex-shrink-0 overflow-hidden bg-surf2">
+                        {thumbPreview ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={thumbPreview} alt="thumbnail" className="w-full h-full object-cover" />
+                        ) : (
+                          <><FiImage size={20} className="text-muted" /><span className="text-[10px] text-muted">Upload thumbnail</span></>
+                        )}
+                      </button>
+                      {thumbPreview && (
+                        <button onClick={() => { setThumbFile(null); setThumbPreview('') }}
+                          className="btn btn-ghost btn-sm text-[11px]">Remove</button>
+                      )}
+                      <input ref={thumbRef} type="file" accept="image/jpeg,image/png" hidden onChange={onThumbPicked} />
                     </div>
+                    <p className="text-[10px] text-muted mt-2">Custom thumbnails require a verified YouTube account. It's applied when you Publish.</p>
                   </div>
 
                   {/* Playlists */}
