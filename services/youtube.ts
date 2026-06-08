@@ -443,12 +443,12 @@ export async function listMyVideos(accessToken: string, maxResults = 25) {
 // ── Update video metadata on YouTube (requires youtube.force-ssl) ──
 export async function updateVideoMetadata(
   accessToken: string, videoId: string,
-  updates: { title?: string; description?: string; tags?: string[] }
+  updates: { title?: string; description?: string; tags?: string[]; privacyStatus?: string; categoryId?: string; madeForKids?: boolean; defaultLanguage?: string; recordingDate?: string }
 ) {
   // videos.update requires the FULL snippet including categoryId,
   // so fetch the current snippet first and merge.
   const curRes = await fetch(
-    `${YT_BASE}/videos?part=snippet&id=${videoId}`,
+    `${YT_BASE}/videos?part=snippet,status&id=${videoId}`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
   )
   const curData = await curRes.json()
@@ -456,20 +456,35 @@ export async function updateVideoMetadata(
   const current = curData.items?.[0]?.snippet
   if (!current) throw new Error('Video not found')
 
-  const snippet = {
+  const snippet: any = {
     title: updates.title ?? current.title,
     description: updates.description ?? current.description,
     tags: updates.tags ?? current.tags ?? [],
-    categoryId: current.categoryId,
+    categoryId: updates.categoryId ?? current.categoryId,
+  }
+  if (updates.defaultLanguage) snippet.defaultLanguage = updates.defaultLanguage
+
+  // Update snippet
+  const parts = ['snippet']
+  const body: any = { id: videoId, snippet }
+  if (updates.privacyStatus !== undefined || updates.madeForKids !== undefined) {
+    parts.push('status')
+    body.status = {}
+    if (updates.privacyStatus) body.status.privacyStatus = updates.privacyStatus
+    if (updates.madeForKids !== undefined) body.status.selfDeclaredMadeForKids = updates.madeForKids
+  }
+  if (updates.recordingDate) {
+    parts.push('recordingDetails')
+    body.recordingDetails = { recordingDate: updates.recordingDate }
   }
 
-  const upRes = await fetch(`${YT_BASE}/videos?part=snippet`, {
+  const upRes = await fetch(`${YT_BASE}/videos?part=${parts.join(',')}`, {
     method: 'PUT',
     headers: {
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ id: videoId, snippet }),
+    body: JSON.stringify(body),
   })
   const upData = await upRes.json()
   if (upData.error) {
