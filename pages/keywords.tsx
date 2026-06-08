@@ -12,7 +12,7 @@ import { FiPlus, FiSearch, FiDownload, FiTrash2, FiChevronDown, FiExternalLink, 
 
 interface TopVideo {
   id: string; title: string; channel: string; thumbnail: string
-  views: number; likes: number; age: string; url: string
+  views: number; likes: number; age: string; url: string; tags?: string[]
 }
 interface KwResult {
   keyword: string; volume: string; avgTopViews: number
@@ -20,6 +20,7 @@ interface KwResult {
   trend: string; freshness: number; avgEngagement: number; idealLength: string
   verdict: { emoji: string; label: string; detail: string }
   related: string[]; topVideos: TopVideo[]; titleIdeas: string[]
+  recommendedTags?: { tag: string; usedBy: number }[]
 }
 
 const fmt = (n: number) =>
@@ -280,11 +281,59 @@ function KeywordsPage() {
                                 <div className="flex-1 min-w-0">
                                   <div className="text-sm text-white truncate group-hover:text-cyan transition-colors">{v.title}</div>
                                   <div className="text-xs text-muted">{v.channel} · {fmt(v.views)} views · {v.age}</div>
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {(v.tags?.length ?? 0) > 0 ? (
+                                      <>
+                                        {(v.tags || []).slice(0, 6).map(t => (
+                                          <span key={t} className="px-1.5 py-0.5 rounded bg-surf2 border border-white/8
+                                                                   text-[9px] text-white/55">{t}</span>
+                                        ))}
+                                        {(v.tags?.length ?? 0) > 6 && (
+                                          <span className="text-[9px] text-muted">+{(v.tags!.length - 6)} more</span>
+                                        )}
+                                      </>
+                                    ) : (
+                                      <span className="px-1.5 py-0.5 rounded bg-red/10 border border-red/20
+                                                       text-[9px] text-red/70">No tags used</span>
+                                    )}
+                                  </div>
                                 </div>
                                 <FiExternalLink size={13} className="text-muted flex-shrink-0" />
                               </a>
                             ))}
                           </div>
+                        </div>
+                      )}
+
+                      {/* Recommended tags — used by videos that actually rank */}
+                      {(r.recommendedTags?.length ?? 0) > 0 && (
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="text-xs font-bold uppercase tracking-wider text-muted">
+                              🏷️ Recommended tags (used by ranking videos)
+                            </div>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText((r.recommendedTags || []).map(t => t.tag).join(', '))
+                                toast.success('Tags copied!')
+                              }}
+                              className="text-xs text-cyan hover:underline">
+                              Copy all
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {(r.recommendedTags || []).map(t => (
+                              <span key={t.tag}
+                                className="badge-green text-[10px] px-2 py-1 flex items-center gap-1.5"
+                                title={`Used by ${t.usedBy} of the top 10 ranking videos`}>
+                                {t.tag}
+                                <span className="text-[8px] opacity-60">×{t.usedBy}</span>
+                              </span>
+                            ))}
+                          </div>
+                          <p className="text-[10px] text-muted mt-2">
+                            Pulled directly from the top-ranking videos for this keyword — ×N shows how many of the top 10 use each tag.
+                          </p>
                         </div>
                       )}
 

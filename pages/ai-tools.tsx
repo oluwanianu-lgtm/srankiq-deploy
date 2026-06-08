@@ -11,6 +11,39 @@ import { FiCopy, FiRefreshCw, FiZap, FiType, FiHash, FiAlignLeft, FiCheckCircle 
 
 type Tool = 'titles' | 'description' | 'hashtags' | 'seo' | 'ideas'
 
+// Section-scoped scanning animation: green line sweeps upward inside the panel
+function SeoLaser() {
+  const [pct, setPct] = React.useState(0)
+  React.useEffect(() => {
+    const iv = setInterval(() => setPct(p => (p >= 99 ? 99 : p + 1)), 60)
+    return () => clearInterval(iv)
+  }, [])
+  return (
+    <div className="relative h-72 rounded-xl overflow-hidden border border-green/20"
+      style={{ background: 'repeating-linear-gradient(0deg, rgba(0,255,136,0.04) 0 1px, transparent 1px 24px), repeating-linear-gradient(90deg, rgba(0,255,136,0.04) 0 1px, transparent 1px 24px)' }}>
+      {/* corner brackets */}
+      {(['top-2 left-2 border-t-2 border-l-2', 'top-2 right-2 border-t-2 border-r-2',
+         'bottom-2 left-2 border-b-2 border-l-2', 'bottom-2 right-2 border-b-2 border-r-2'] as string[]).map((c, i) => (
+        <div key={i} className={`absolute w-5 h-5 border-green/60 ${c}`} />
+      ))}
+      {/* sweeping green line, bottom → top */}
+      <motion.div
+        className="absolute left-0 right-0 h-[2px]"
+        style={{ background: '#00ff88', boxShadow: '0 0 18px 4px rgba(0,255,136,0.55)' }}
+        initial={{ top: '100%' }}
+        animate={{ top: ['100%', '0%'] }}
+        transition={{ duration: 1.6, repeat: Infinity, ease: 'linear' }}
+      />
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <div className="font-display text-5xl text-green" style={{ textShadow: '0 0 24px rgba(0,255,136,0.5)' }}>
+          {pct}%
+        </div>
+        <div className="text-xs text-green/80 uppercase tracking-[0.3em] mt-2">Scanning SEO</div>
+      </div>
+    </div>
+  )
+}
+
 function AIToolsPage() {
   const { activePlatform } = usePlatform()
   const activePlt = PLATFORMS.find(p => p.code === activePlatform)!
@@ -87,7 +120,7 @@ function AIToolsPage() {
                         border border-cyan/20 flex items-center justify-center text-cyan text-xl">✦</div>
           <div>
             <h1 className="text-xl font-bold">AI Content Tools</h1>
-            <p className="text-muted text-sm">Powered by Google Gemini AI</p>
+            <p className="text-muted text-sm">Powered by SRankIQ AI</p>
           </div>
           <AIBadge />
         </div>
@@ -164,7 +197,9 @@ function AIToolsPage() {
             <button onClick={runTool} disabled={loading}
               className="btn btn-cyan w-full justify-center gap-2">
               {loading ? <Spinner size={16} /> : <FiZap size={15} />}
-              {loading ? 'Generating with Gemini AI...' : 'Generate with AI →'}
+              {loading
+                ? (tool === 'seo' ? 'Scanning...' : 'Generating...')
+                : (tool === 'seo' ? '🔬 Scan SEO →' : 'Generate with AI →')}
             </button>
           </div>
 
@@ -175,7 +210,8 @@ function AIToolsPage() {
               {results && <AIBadge />}
             </h3>
 
-            {loading && (
+            {loading && tool === 'seo' && <SeoLaser />}
+            {loading && tool !== 'seo' && (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <div className="loading-dots flex justify-center mb-4"><span /><span /><span /></div>
                 <p className="text-muted text-sm">Gemini AI is generating your content...</p>

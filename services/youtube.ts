@@ -256,6 +256,7 @@ export async function getKeywordStats(keyword: string) {
       title: v.snippet.title,
       channel: v.snippet.channelTitle,
       thumbnail: v.snippet.thumbnails?.medium?.url || '',
+      tags: v.snippet.tags || [],
       publishedAt: v.snippet.publishedAt,
       views: parseInt(v.statistics.viewCount) || 0,
       likes: parseInt(v.statistics.likeCount) || 0,

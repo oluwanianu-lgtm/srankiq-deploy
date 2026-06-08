@@ -73,7 +73,19 @@ async function handler(req: AuthedRequest, res: NextApiResponse) {
           idealLength: avgMin <= 1 ? 'Short (under 60s)' : `~${avgMin} min`,
           verdict: verdictFor(rankingChance, volume, competition),
           related,
-          topVideos: stats.topVideos.slice(0, 5).map((v: any) => ({
+          // Tags actually used by the videos ranking right now — proven to rank
+          recommendedTags: (() => {
+            const freq: Record<string, number> = {}
+            stats.topVideos.forEach((v: any) => (v.tags || []).forEach((t: string) => {
+              const key = t.toLowerCase().trim()
+              if (key.length > 1 && key.length < 40) freq[key] = (freq[key] || 0) + 1
+            }))
+            return Object.entries(freq)
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 15)
+              .map(([tag, count]) => ({ tag, usedBy: count }))
+          })(),
+          topVideos: stats.topVideos.map((v: any) => ({
             ...v, age: timeAgo(v.publishedAt),
           })),
         }

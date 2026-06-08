@@ -198,7 +198,53 @@ function CompetitorsPage() {
           </div>
 
           {/* Analysis */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2 relative">
+
+            {/* ── Clone verification overlay: blurs ONLY this section ── */}
+            {cloning && (
+              <div className="absolute inset-0 z-40 rounded-2xl overflow-hidden
+                              backdrop-blur-md bg-black/40 flex flex-col items-center justify-center">
+                <div className="relative w-36 h-36 mb-5">
+                  {/* outer pulsing ring */}
+                  <motion.div className="absolute inset-0 rounded-full border-2 border-green/30"
+                    animate={{ scale: [1, 1.15, 1], opacity: [0.6, 0.15, 0.6] }}
+                    transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }} />
+                  {/* rotating arc — Face ID style */}
+                  <motion.svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}>
+                    <circle cx="50" cy="50" r="44" fill="none" stroke="rgba(0,255,136,0.15)" strokeWidth="4" />
+                    <circle cx="50" cy="50" r="44" fill="none" stroke="#00ff88" strokeWidth="4"
+                      strokeLinecap="round" strokeDasharray="80 196"
+                      style={{ filter: 'drop-shadow(0 0 8px rgba(0,255,136,0.7))' }} />
+                  </motion.svg>
+                  {/* inner tick marks like Face ID */}
+                  <motion.svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full"
+                    animate={{ rotate: -360 }}
+                    transition={{ duration: 6, repeat: Infinity, ease: 'linear' }}>
+                    {Array.from({ length: 24 }).map((_, i) => (
+                      <line key={i}
+                        x1="50" y1="14" x2="50" y2="19"
+                        stroke="rgba(0,255,136,0.5)" strokeWidth="1.5"
+                        transform={`rotate(${i * 15} 50 50)`} />
+                    ))}
+                  </motion.svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <motion.div className="text-3xl"
+                      animate={{ scale: [1, 1.12, 1] }}
+                      transition={{ duration: 1.8, repeat: Infinity }}>
+                      ✦
+                    </motion.div>
+                  </div>
+                </div>
+                <div className="font-display text-green text-lg"
+                  style={{ textShadow: '0 0 20px rgba(0,255,136,0.5)' }}>
+                  Verifying channel data
+                </div>
+                <div className="text-xs text-white/50 mt-1">Building your launch blueprint...</div>
+              </div>
+            )}
+
             {loading && (
               <div className="card flex flex-col items-center justify-center py-20">
                 <div className="loading-dots flex justify-center mb-4"><span /><span /><span /></div>
