@@ -33,10 +33,15 @@ function SettingsPage() {
     finally { setSaving(false) }
   }
 
-  const connectYouTube = () => {
-    const google = (window as any).google
+  const connectYouTube = async () => {
+    // Wait up to ~3s for the Google script to finish loading before giving up
+    let google = (window as any).google
+    for (let i = 0; i < 15 && !google?.accounts?.oauth2; i++) {
+      await new Promise(r => setTimeout(r, 200))
+      google = (window as any).google
+    }
     if (!google?.accounts?.oauth2) {
-      toast.error('Google Sign-In not loaded yet. Please refresh and try again.')
+      toast.error('Google Sign-In is still loading — please wait a moment and try again.')
       return
     }
 

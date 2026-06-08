@@ -1,6 +1,7 @@
 // pages/_app.tsx
 import type { AppProps } from 'next/app'
 import Head from 'next/head'
+import Script from 'next/script'
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider } from '../contexts/AuthContext'
 import { PlatformProvider } from '../contexts/PlatformContext'
@@ -20,6 +21,9 @@ export default function App({ Component, pageProps }: AppProps) {
         <link rel="icon" href="/favicon.ico" />
         <title>SRankIQ — Social Media Ranking Intelligence</title>
       </Head>
+
+      {/* Google Identity Services — required for YouTube connect/reconnect */}
+      <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" />
 
       <AuthProvider>
         <PlatformProvider>
