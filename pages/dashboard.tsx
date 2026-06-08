@@ -57,10 +57,39 @@ function DashboardPage() {
   const ytToken = (pData as any)?.accessToken
   const [ytLoading, setYtLoading] = useState(false)
 
-  const filteredVideos = (videos || []).filter(v =>
-    videoTab === 'shorts' ? (v.durationSec > 0 && v.durationSec <= 60)
-      : videoTab === 'videos' ? (v.durationSec > 60) : false
-  )
+  // Lazy-loaded content per tab
+  const [tabData, setTabData] = useState<Record<string, any[]>>({})
+  const [tabLoading, setTabLoading] = useState<string>('')
+
+  const loadTab = async (tab: VideoTab) => {
+    if (!ytToken || tabData[tab]) return // cached
+    setTabLoading(tab)
+    try {
+      const type = tab === 'shorts' ? 'videos' : tab // shorts come from the same uploads call
+      const res = await apiPost('/api/videos/content', { accessToken: ytToken, type })
+      // videos+shorts share the uploads response; cache both off one call
+      if (tab === 'videos' || tab === 'shorts') {
+        setTabData(d => ({ ...d, videos: res.data.items || [], shorts: res.data.items || [] }))
+        if (!videos.length) setVideos(res.data.items || [])
+      } else {
+        setTabData(d => ({ ...d, [tab]: res.data.items || [] }))
+      }
+    } catch (e: any) {
+      if (e?.response?.data?.error === 'TOKEN_EXPIRED') toast.error('Session expired — reconnect YouTube in Settings')
+    } finally { setTabLoading('') }
+  }
+
+  // Load the active tab when it changes (and on first connect)
+  useEffect(() => {
+    if (connected && ytToken) loadTab(videoTab)
+  }, [videoTab, connected, ytToken]) // eslint-disable-line
+
+  const currentItems = tabData[videoTab] || []
+  const filteredVideos = (videoTab === 'shorts'
+    ? currentItems.filter((v: any) => v.durationSec > 0 && v.durationSec <= 60)
+    : videoTab === 'videos'
+    ? currentItems.filter((v: any) => v.durationSec > 60)
+    : currentItems)
   const realAvgViews = videos.length
     ? Math.round(videos.reduce((s, v) => s + (v.views || 0), 0) / videos.length) : 0
   const realEngagement = videos.length
@@ -91,7 +120,7 @@ function DashboardPage() {
         if (ytToken) {
           setYtLoading(true)
           apiPost('/api/analytics/youtube', { accessToken: ytToken })
-            .then(r => { setChannel(r.data.channel); setVideos(r.data.videos || []) })
+            .then(r => { setChannel(r.data.channel) })
             .catch(() => {})
             .finally(() => setYtLoading(false))
         }
@@ -223,15 +252,53 @@ function DashboardPage() {
 
             {/* Filtered content — full editor list (My Videos experience inline) */}
             <div className="pt-4">
-              {(videoTab === 'videos' || videoTab === 'shorts') && (
-                <VideoEditList videos={filteredVideos} accessToken={ytToken}
-                  onVideoUpdated={(uv) => setVideos(vs => vs.map(x => x.id === uv.id ? { ...x, ...uv } : x))} />
-              )}
-              {videoTab === 'live' && (
-                <div className="text-center py-8 text-muted text-sm">Live streams appear here when you go live on YouTube.</div>
-              )}
-              {videoTab === 'playlists' && (
-                <div className="text-center py-8 text-muted text-sm">Playlist management is coming soon.</div>
+              {tabLoading === videoTab ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <div className="loading-dots flex justify-center mb-3"><span /><span /><span /></div>
+                  <p className="text-muted text-sm">Loading {videoTab}...</p>
+                </div>
+              ) : (
+                <>
+                  {(videoTab === 'videos' || videoTab === 'shorts') && (
+                    <VideoEditList videos={filteredVideos} accessToken={ytToken}
+                      onVideoUpdated={(uv) => {
+                        setVideos(vs => vs.map(x => x.id === uv.id ? { ...x, ...uv } : x))
+                        setTabData(d => ({
+                          ...d,
+                          videos: (d.videos || []).map((x: any) => x.id === uv.id ? { ...x, ...uv } : x),
+                          shorts: (d.shorts || []).map((x: any) => x.id === uv.id ? { ...x, ...uv } : x),
+                        }))
+                      }} />
+                  )}
+
+                  {videoTab === 'live' && (
+                    filteredVideos.length > 0 ? (
+                      <VideoEditList videos={filteredVideos} accessToken={ytToken} />
+                    ) : (
+                      <div className="text-center py-8 text-muted text-sm">No live streams found on this channel.</div>
+                    )
+                  )}
+
+                  {videoTab === 'playlists' && (
+                    filteredVideos.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {filteredVideos.map((p: any) => (
+                          <a key={p.id} href={p.url} target="_blank" rel="noopener noreferrer"
+                            className="group rounded-xl overflow-hidden bg-surf2 hover:bg-surf3 transition-colors">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            {p.thumbnail && <img src={p.thumbnail} alt="" className="w-full aspect-video object-cover" />}
+                            <div className="p-2.5">
+                              <div className="text-sm text-white line-clamp-2 group-hover:text-cyan transition-colors">{p.title}</div>
+                              <div className="text-xs text-muted mt-1">{p.itemCount} videos</div>
+                            </div>
+                          </a>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-muted text-sm">No playlists found on this channel.</div>
+                    )
+                  )}
+                </>
               )}
             </div>
           </div>

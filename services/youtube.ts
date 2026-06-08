@@ -429,6 +429,8 @@ export async function listMyVideos(accessToken: string, maxResults = 25) {
     tags: v.snippet.tags || [],
     categoryId: v.snippet.categoryId,
     thumbnail: v.snippet.thumbnails?.medium?.url || '',
+    durationSec: parseDurationSeconds(v.contentDetails?.duration),
+    isShort: parseDurationSeconds(v.contentDetails?.duration) <= 60,
     publishedAt: v.snippet.publishedAt,
     privacy: v.status?.privacyStatus || 'public',
     views: parseInt(v.statistics.viewCount) || 0,
@@ -497,4 +499,60 @@ export async function getVideoDetails(videoId: string) {
     likes: parseInt(v.statistics.likeCount) || 0,
     comments: parseInt(v.statistics.commentCount) || 0,
   }
+}
+
+// ── Completed/active live streams (separate from uploads) ──
+export async function getMyLiveStreams(accessToken: string, maxResults = 25) {
+  // channels?mine gives the channelId; then search that channel for live events
+  const chRes = await fetch(`${YT_BASE}/channels?part=id&mine=true`,
+    { headers: { Authorization: `Bearer ${accessToken}` } })
+  const chData = await chRes.json()
+  if (chData.error) throw new Error(chData.error.message || 'YouTube auth failed')
+  const channelId = chData.items?.[0]?.id
+  if (!channelId) return []
+
+  // search the channel for completed + live broadcasts
+  const types = ['completed', 'live']
+  const idSet = new Set<string>()
+  for (const ev of types) {
+    const sRes = await fetch(
+      `${YT_BASE}/search?part=id&channelId=${channelId}&eventType=${ev}&type=video&maxResults=${maxResults}&order=date`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    )
+    const sData = await sRes.json()
+    ;(sData.items || []).forEach((i: any) => i.id?.videoId && idSet.add(i.id.videoId))
+  }
+  const ids = Array.from(idSet).slice(0, maxResults).join(',')
+  if (!ids) return []
+
+  const vRes = await fetch(
+    `${YT_BASE}/videos?part=snippet,statistics,contentDetails&id=${ids}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  )
+  const vData = await vRes.json()
+  return (vData.items || []).map((v: any) => ({
+    id: v.id, title: v.snippet.title, description: v.snippet.description || '',
+    thumbnail: v.snippet.thumbnails?.medium?.url || '',
+    tags: v.snippet.tags || [], publishedAt: v.snippet.publishedAt,
+    views: parseInt(v.statistics.viewCount) || 0,
+    likes: parseInt(v.statistics.likeCount) || 0,
+    comments: parseInt(v.statistics.commentCount) || 0,
+    url: `https://youtube.com/watch?v=${v.id}`,
+  }))
+}
+
+// ── The user's playlists ──
+export async function getMyPlaylists(accessToken: string, maxResults = 25) {
+  const res = await fetch(
+    `${YT_BASE}/playlists?part=snippet,contentDetails&mine=true&maxResults=${maxResults}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  )
+  const data = await res.json()
+  if (data.error) throw new Error(data.error.message || 'Could not load playlists')
+  return (data.items || []).map((p: any) => ({
+    id: p.id, title: p.snippet.title, description: p.snippet.description || '',
+    thumbnail: p.snippet.thumbnails?.medium?.url || '',
+    itemCount: p.contentDetails?.itemCount || 0,
+    url: `https://youtube.com/playlist?list=${p.id}`,
+  }))
 }
