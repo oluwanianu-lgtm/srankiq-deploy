@@ -100,6 +100,23 @@ function KeywordsPage() {
     }
   }
 
+  // Robust copy: clipboard API with a legacy fallback, toast only on success
+  const copyText = async (text: string, successMsg: string) => {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text)
+      } else {
+        const ta = document.createElement('textarea')
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'
+        document.body.appendChild(ta); ta.focus(); ta.select()
+        document.execCommand('copy'); document.body.removeChild(ta)
+      }
+      toast.success(successMsg)
+    } catch {
+      toast.error('Could not copy — try selecting the text manually')
+    }
+  }
+
   const useInUpload = (title: string) => {
     sessionStorage.setItem('srankiq_upload_prefill', JSON.stringify({
       title, platform: activePlatform, tags: keywords.join(', '),
@@ -275,22 +292,24 @@ function KeywordsPage() {
                           </div>
                           <div className="space-y-2">
                             {(r.topVideos || []).map((v, vi) => (
-                              <a key={v.id} href={v.url} target="_blank" rel="noopener noreferrer"
+                              <div key={v.id}
                                 className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors group">
                                 <span className="text-xs font-bold text-muted w-4">{vi + 1}</span>
                                 {v.thumbnail && (
                                   /* eslint-disable-next-line @next/next/no-img-element */
-                                  <img src={v.thumbnail} alt="" className="w-24 aspect-video object-cover rounded-lg flex-shrink-0" />
+                                  <img src={v.thumbnail} alt="" onClick={() => window.open(v.url, '_blank')}
+                                    className="w-24 aspect-video object-cover rounded-lg flex-shrink-0 cursor-pointer" />
                                 )}
                                 <div className="flex-1 min-w-0">
-                                  <div className="text-sm text-white truncate group-hover:text-cyan transition-colors">{v.title}</div>
+                                  <div onClick={() => window.open(v.url, '_blank')}
+                                    className="text-sm text-white truncate group-hover:text-cyan transition-colors cursor-pointer">{v.title}</div>
                                   <div className="text-xs text-muted">{v.channel} · {fmt(v.views)} views · {v.age}</div>
                                   <div className="flex flex-wrap gap-1 mt-1">
                                     {(v.tags?.length ?? 0) > 0 ? (
                                       <>
                                         {(v.tags || []).slice(0, 6).map(t => (
                                           <span key={t}
-                                            onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(t); toast.success(`Copied "${t}"`) }}
+                                            onClick={() => copyText(t, `Copied "${t}"`)}
                                             title="Click to copy"
                                             className="px-1.5 py-0.5 rounded bg-surf2 border border-white/8 text-[9px] text-white/55
                                                        cursor-pointer hover:border-cyan/40 hover:text-cyan transition-colors">
@@ -301,7 +320,7 @@ function KeywordsPage() {
                                           <span className="text-[9px] text-muted">+{(v.tags!.length - 6)} more</span>
                                         )}
                                         <span
-                                          onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText((v.tags || []).join(', ')); toast.success(`All ${v.tags!.length} tags copied!`) }}
+                                          onClick={() => copyText((v.tags || []).join(', '), `All ${v.tags!.length} tags copied!`)}
                                           className="px-1.5 py-0.5 rounded border border-cyan/30 text-[9px] text-cyan
                                                      cursor-pointer hover:bg-cyan/10 transition-colors">
                                           ⧉ Copy all
@@ -313,8 +332,11 @@ function KeywordsPage() {
                                     )}
                                   </div>
                                 </div>
-                                <FiExternalLink size={13} className="text-muted flex-shrink-0" />
-                              </a>
+                                <a href={v.url} target="_blank" rel="noopener noreferrer"
+                                  className="text-muted hover:text-white flex-shrink-0">
+                                  <FiExternalLink size={13} />
+                                </a>
+                              </div>
                             ))}
                           </div>
                         </div>
@@ -329,8 +351,7 @@ function KeywordsPage() {
                             </div>
                             <button
                               onClick={() => {
-                                navigator.clipboard.writeText((r.recommendedTags || []).map(t => t.tag).join(', '))
-                                toast.success('Tags copied!')
+                                copyText((r.recommendedTags || []).map(t => t.tag).join(', '), 'Tags copied!')
                               }}
                               className="text-xs text-cyan hover:underline">
                               Copy all
@@ -339,7 +360,7 @@ function KeywordsPage() {
                           <div className="flex flex-wrap gap-2">
                             {(r.recommendedTags || []).map(t => (
                               <span key={t.tag}
-                                onClick={() => { navigator.clipboard.writeText(t.tag); toast.success(`Copied "${t.tag}"`) }}
+                                onClick={() => copyText(t.tag, `Copied "${t.tag}"`)}
                                 className="badge-green text-[10px] px-2 py-1 flex items-center gap-1.5
                                            cursor-pointer hover:brightness-125 transition-all"
                                 title={`Used by ${t.usedBy} of the top 10 ranking videos — click to copy`}>
