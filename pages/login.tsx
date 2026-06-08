@@ -86,8 +86,9 @@ export default function LoginPage() {
           {/* Logo */}
           <Link href="/">
             <div className="flex items-center gap-2 mb-10 cursor-pointer">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan to-magenta
-                            flex items-center justify-center font-display text-black text-xl">S</div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/brand/logo-icon-cyan.png" alt="SRankIQ" width={40} height={40}
+                style={{ width: 40, height: 40, objectFit: 'contain' }} />
               <span className="font-display text-2xl"><span className="text-cyan">S</span>RankIQ</span>
             </div>
           </Link>

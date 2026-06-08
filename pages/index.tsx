@@ -47,8 +47,9 @@ export default function LandingPage() {
       <nav className="fixed top-0 left-0 right-0 z-50 h-16 border-b border-white/5
                      bg-bg/80 backdrop-blur-xl flex items-center px-6 md:px-10">
         <div className="flex items-center gap-2 mr-auto">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan to-magenta
-                        flex items-center justify-center font-display text-black text-lg">S</div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/logo-icon-cyan.png" alt="SRankIQ" width={36} height={36}
+            style={{ width: 36, height: 36, objectFit: 'contain' }} />
           <span className="font-display text-xl tracking-wide">
             <span className="text-cyan">S</span>RankIQ
           </span>
@@ -205,8 +206,9 @@ export default function LandingPage() {
       <footer className="border-t border-white/5 py-10 px-6">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded bg-gradient-to-br from-cyan to-magenta
-                          flex items-center justify-center font-display text-black text-sm">S</div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/logo-icon-cyan.png" alt="SRankIQ" width={24} height={24}
+              style={{ width: 24, height: 24, objectFit: 'contain' }} />
             <span className="font-display text-lg"><span className="text-cyan">S</span>RankIQ</span>
           </div>
           <p className="text-xs text-muted">© 2026 SRankIQ. Social Media Ranking Intelligence. All rights reserved.</p>

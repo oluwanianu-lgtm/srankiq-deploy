@@ -18,8 +18,9 @@ export default function LoadingScreen({ fading }: { fading?: boolean }) {
             strokeLinecap="round" strokeDasharray="120 360" className="sq-orbit-arc" />
         </svg>
 
-        {/* logo with sweep shine */}
+        {/* logo with sweep shine + neon edge */}
         <div className="sq-logo-wrap">
+          <div className="sq-neon-edge" />
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/brand/logo-icon-cyan.png" alt="SRankIQ" className="sq-logo-img" />
           <div className="sq-sweep" />
@@ -47,7 +48,20 @@ export default function LoadingScreen({ fading }: { fading?: boolean }) {
         .sq-logo-wrap {
           position: relative; width: 92px; height: 92px; border-radius: 22px; overflow: hidden;
           animation: sq-pulse 1.8s ease-in-out infinite;
-          box-shadow: 0 0 40px rgba(0,180,255,0.25);
+        }
+        /* glowing neon edge that hugs the logo */
+        .sq-neon-edge {
+          position: absolute; inset: -2px; border-radius: 24px; padding: 2px; z-index: 2;
+          background: linear-gradient(135deg, #00f5ff, #7b2fff, #ff0090, #00f5ff);
+          background-size: 300% 300%;
+          -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          -webkit-mask-composite: xor; mask-composite: exclude;
+          animation: sq-neon-rotate 3s linear infinite, sq-neon-glow 1.8s ease-in-out infinite;
+        }
+        @keyframes sq-neon-rotate { to { background-position: 300% 50%; } }
+        @keyframes sq-neon-glow {
+          0%, 100% { box-shadow: 0 0 14px 1px rgba(0,245,255,0.5), 0 0 30px 4px rgba(123,47,255,0.35); }
+          50% { box-shadow: 0 0 26px 4px rgba(0,245,255,0.85), 0 0 54px 10px rgba(123,47,255,0.6); }
         }
         .sq-logo-img { width: 100%; height: 100%; object-fit: contain; display: block; }
         @keyframes sq-pulse {
