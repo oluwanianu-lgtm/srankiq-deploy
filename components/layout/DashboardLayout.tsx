@@ -5,7 +5,7 @@ import { useRouter } from 'next/router'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../../contexts/AuthContext'
 import { usePlatform, PLATFORMS } from '../../contexts/PlatformContext'
-import { FiHome, FiBarChart2, FiSearch, FiTrendingUp, FiUsers, FiZap,
+import { FiHome, FiBarChart2, FiSearch, FiTrendingUp, FiUsers, FiZap, FiCompass,
          FiUpload, FiSettings, FiCreditCard, FiMenu, FiX, FiBell,
          FiLogOut, FiFileText, FiMessageSquare } from 'react-icons/fi'
 
@@ -49,6 +49,7 @@ const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: FiHome },
   { href: '/analytics', label: 'Analytics', icon: FiBarChart2 },
   { href: '/keywords', label: 'Keywords', icon: FiSearch },
+  { href: '/niche-finder', label: 'Niche Finder', icon: FiCompass },
   { href: '/trends', label: 'Trends', icon: FiTrendingUp },
   { href: '/competitors', label: 'Competitors', icon: FiUsers },
   { href: '/ai-tools', label: 'AI Tools', icon: FiZap },

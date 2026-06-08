@@ -571,3 +571,86 @@ export async function getMyPlaylists(accessToken: string, maxResults = 25) {
     url: `https://youtube.com/playlist?list=${p.id}`,
   }))
 }
+
+// ── Niche Finder: real competition/opportunity analysis from YouTube data ──
+export async function analyzeNiche(seed: string, regionCode = 'US') {
+  // 1) Pull the top results for the seed term (real search)
+  const searchUrl = `${YT_BASE}/search?part=snippet&q=${encodeURIComponent(seed)}&type=video&maxResults=25&order=relevance&regionCode=${regionCode}&key=${API_KEY}`
+  const sRes = await fetch(searchUrl)
+  const sData = await sRes.json()
+  if (sData.error) throw new Error(sData.error.message || 'YouTube search failed')
+  const items = sData.items || []
+  const totalResults = sData.pageInfo?.totalResults || 0
+
+  const videoIds = items.map((i: any) => i.id?.videoId).filter(Boolean)
+  const channelIds = Array.from(new Set(items.map((i: any) => i.snippet?.channelId).filter(Boolean)))
+  if (videoIds.length === 0) {
+    return { seed, totalResults, videoCount: 0, sampleSize: 0, avgViews: 0, medianViews: 0,
+      avgChannelSubs: 0, freshVideos: 0, smallChannelWins: 0, competitionScore: 50, demandScore: 0,
+      opportunityScore: 0, verdict: 'No data', topVideos: [] }
+  }
+
+  // 2) Real video stats
+  const vRes = await fetch(`${YT_BASE}/videos?part=snippet,statistics,contentDetails&id=${videoIds.join(',')}&key=${API_KEY}`)
+  const vData = await vRes.json()
+  const vids = vData.items || []
+
+  // 3) Real channel stats (subscriber counts) — to detect "small channels ranking"
+  const cRes = await fetch(`${YT_BASE}/channels?part=statistics,snippet&id=${channelIds.join(',')}&key=${API_KEY}`)
+  const cData = await cRes.json()
+  const subsByChannel: Record<string, number> = {}
+  ;(cData.items || []).forEach((c: any) => { subsByChannel[c.id] = parseInt(c.statistics?.subscriberCount) || 0 })
+
+  // 4) Compute real metrics
+  const now = Date.now()
+  const views = vids.map((v: any) => parseInt(v.statistics?.viewCount) || 0).sort((a: number, b: number) => a - b)
+  const avgViews = views.length ? Math.round(views.reduce((s: number, x: number) => s + x, 0) / views.length) : 0
+  const medianViews = views.length ? views[Math.floor(views.length / 2)] : 0
+
+  const subsList = Object.values(subsByChannel)
+  const avgChannelSubs = subsList.length ? Math.round(subsList.reduce((s, x) => s + x, 0) / subsList.length) : 0
+
+  // videos published in the last 90 days (demand/freshness)
+  const freshVideos = vids.filter((v: any) => (now - new Date(v.snippet.publishedAt).getTime()) < 90 * 864e5).length
+
+  // "small channel wins": videos with strong views from sub-50k-subscriber channels (opportunity signal)
+  const smallChannelWins = vids.filter((v: any) => {
+    const subs = subsByChannel[v.snippet.channelId] || 0
+    const vv = parseInt(v.statistics?.viewCount) || 0
+    return subs > 0 && subs < 50000 && vv > Math.max(20000, avgViews * 0.5)
+  }).length
+
+  // Competition: more total results + bigger channels dominating = higher competition (0-100, higher=harder)
+  const resultPressure = Math.min(60, Math.log10(Math.max(1, totalResults)) * 10) // ~0-60
+  const channelPressure = Math.min(40, (avgChannelSubs / 1_000_000) * 40)          // big channels = harder
+  const competitionScore = Math.round(Math.min(100, resultPressure + channelPressure))
+
+  // Demand: real view levels + freshness (0-100, higher=more demand)
+  const viewDemand = Math.min(70, Math.log10(Math.max(1, avgViews)) * 12)
+  const freshDemand = Math.min(30, (freshVideos / Math.max(1, vids.length)) * 30)
+  const demandScore = Math.round(Math.min(100, viewDemand + freshDemand))
+
+  // Opportunity: high demand + low competition + small channels breaking through
+  const opportunityScore = Math.round(Math.max(0, Math.min(100,
+    demandScore * 0.5 + (100 - competitionScore) * 0.35 + (smallChannelWins / Math.max(1, vids.length)) * 100 * 0.15
+  )))
+  const verdict = opportunityScore >= 70 ? 'Great opportunity'
+    : opportunityScore >= 50 ? 'Worth pursuing'
+    : opportunityScore >= 35 ? 'Competitive' : 'Saturated'
+
+  const topVideos = vids.slice(0, 8).map((v: any) => ({
+    id: v.id, title: v.snippet.title, channel: v.snippet.channelTitle,
+    channelSubs: subsByChannel[v.snippet.channelId] || 0,
+    views: parseInt(v.statistics?.viewCount) || 0,
+    publishedAt: v.snippet.publishedAt,
+    thumbnail: v.snippet.thumbnails?.medium?.url || '',
+    url: `https://youtube.com/watch?v=${v.id}`,
+    tags: v.snippet.tags || [],
+  }))
+
+  return {
+    seed, totalResults, videoCount: totalResults, sampleSize: vids.length,
+    avgViews, medianViews, avgChannelSubs, freshVideos, smallChannelWins,
+    competitionScore, demandScore, opportunityScore, verdict, topVideos,
+  }
+}

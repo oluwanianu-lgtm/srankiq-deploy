@@ -69,6 +69,25 @@ function UploadPage() {
     setThumbPreview(URL.createObjectURL(f))
   }
 
+  const [genThumb, setGenThumb] = useState(false)
+  const generateThumbnailAI = async () => {
+    if (!form.title.trim()) { toast.error('Enter a title first'); return }
+    setGenThumb(true)
+    try {
+      const res = await apiPost('/api/ai/thumbnail', { title: form.title, platform: 'YouTube', style: 'bold, high-contrast, eye-catching' })
+      const dataUrl = res.data.image
+      if (!dataUrl) throw new Error('no image')
+      // convert data URL → File so it uploads to YouTube like a normal thumbnail
+      const blob = await (await fetch(dataUrl)).blob()
+      const file = new File([blob], 'ai-thumbnail.png', { type: blob.type || 'image/png' })
+      setThumbFile(file)
+      setThumbPreview(dataUrl)
+      toast.success('AI thumbnail ready!')
+    } catch {
+      toast.error('Thumbnail generation is busy — try again in a moment')
+    } finally { setGenThumb(false) }
+  }
+
   // Upload custom thumbnail to YouTube (thumbnails.set — needs verified account)
   const uploadThumbnail = async (vid: string) => {
     if (!thumbFile || !accessToken) return
@@ -171,19 +190,27 @@ function UploadPage() {
     if (!form.title) { toast.error('Enter a title first'); return }
     setGenerating(true)
     try {
-      const [titlesRes, hashRes, descRes] = await Promise.all([
+      const [titlesRes, hashRes, descRes] = await Promise.allSettled([
         apiPost('/api/ai/titles', { topic: form.title, platform: 'YouTube', style: 'viral', keywords: [] }),
         apiPost('/api/ai/hashtags', { topic: form.title, platform: 'YouTube', count: 12 }),
-        apiPost('/api/ai/description', { title: form.title, platform: 'YouTube', keywords: [], tone: 'engaging' }).catch(() => null),
+        apiPost('/api/ai/description', { title: form.title, platform: 'YouTube', keywords: [], tone: 'engaging' }),
       ])
-      setAiTitles(titlesRes.data.titles?.slice(0, 5) || [])
-      setForm(f => ({
-        ...f,
-        tags: f.tags || (hashRes.data.hashtags || []).map((h: any) => (h.tag || '').replace(/^#/, '')).join(', '),
-        description: f.description || (descRes?.data?.description || descRes?.data || ''),
-      }))
-      toast.success('AI suggestions ready!')
-    } catch { toast.error('AI generation failed') }
+      let any = false
+      if (titlesRes.status === 'fulfilled') {
+        const t = titlesRes.value.data.titles?.slice(0, 5) || []
+        if (t.length) { setAiTitles(t); any = true }
+      }
+      if (hashRes.status === 'fulfilled') {
+        const tags = (hashRes.value.data.hashtags || []).map((h: any) => (h.tag || '').replace(/^#/, '')).filter(Boolean)
+        if (tags.length) { setForm(f => ({ ...f, tags: f.tags || tags.join(', ') })); any = true }
+      }
+      if (descRes.status === 'fulfilled') {
+        const d = descRes.value.data?.description || descRes.value.data || ''
+        if (d) { setForm(f => ({ ...f, description: f.description || d })); any = true }
+      }
+      if (any) toast.success('AI suggestions ready!')
+      else toast.error('AI is busy right now — please try again in a moment')
+    } catch { toast.error('AI is busy right now — please try again in a moment') }
     finally { setGenerating(false) }
   }
 
@@ -382,13 +409,20 @@ function UploadPage() {
                           <><FiImage size={20} className="text-muted" /><span className="text-[10px] text-muted">Upload thumbnail</span></>
                         )}
                       </button>
-                      {thumbPreview && (
-                        <button onClick={() => { setThumbFile(null); setThumbPreview('') }}
-                          className="btn btn-ghost btn-sm text-[11px]">Remove</button>
-                      )}
+                      <div className="flex flex-col gap-2">
+                        <button onClick={generateThumbnailAI} disabled={genThumb}
+                          className="btn btn-cyan btn-sm gap-1.5">
+                          {genThumb ? <Spinner size={13} /> : <FiZap size={13} />}
+                          {genThumb ? 'Generating...' : 'Generate with AI'}
+                        </button>
+                        {thumbPreview && (
+                          <button onClick={() => { setThumbFile(null); setThumbPreview('') }}
+                            className="btn btn-ghost btn-sm text-[11px]">Remove</button>
+                        )}
+                      </div>
                       <input ref={thumbRef} type="file" accept="image/jpeg,image/png" hidden onChange={onThumbPicked} />
                     </div>
-                    <p className="text-[10px] text-muted mt-2">Custom thumbnails require a verified YouTube account. It's applied when you Publish.</p>
+                    <p className="text-[10px] text-muted mt-2">AI uses your title to design a thumbnail. Custom thumbnails require a verified YouTube account; applied when you Publish.</p>
                   </div>
 
                   {/* Playlists */}

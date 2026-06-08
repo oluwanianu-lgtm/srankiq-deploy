@@ -13,7 +13,7 @@ interface GeminiResponse {
   }>
 }
 
-async function callGemini(prompt: string, systemPrompt?: string, _jsonMode = false): Promise<string> {
+export async function callGemini(prompt: string, systemPrompt?: string, _jsonMode = false): Promise<string> {
   const messages = []
 
   if (systemPrompt) {
@@ -400,7 +400,7 @@ Return JSON only:
 }
 
 // Tolerant JSON parser: strips fences, extracts the JSON body, never throws on junk
-function safeJSON(text: string): any {
+export function safeJSON(text: string): any {
   const clean = String(text || '').replace(/```json|```/g, '').trim()
   try { return JSON.parse(clean) } catch { /* try extraction */ }
   const objStart = clean.indexOf('{'), objEnd = clean.lastIndexOf('}')
