@@ -385,6 +385,7 @@ export async function searchTopVideos(queryStr: string, regionCode = 'US', pageT
       id: v.id,
       title: v.snippet.title,
       channel: v.snippet.channelTitle,
+      channelId: v.snippet.channelId,
       category: 'Search result',
       thumbnail: v.snippet.thumbnails?.medium?.url || v.snippet.thumbnails?.high?.url || '',
       views,
