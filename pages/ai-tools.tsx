@@ -59,8 +59,10 @@ function AIToolsPage() {
   const [seoDesc, setSeoDesc] = useState('')
   const [seoTags, setSeoTags] = useState('')
 
-  // Results
-  const [results, setResults] = useState<any>(null)
+  // Results — kept per tab so switching between Description/SEO/etc preserves each
+  const [resultsMap, setResultsMap] = useState<Record<string, any>>({})
+  const results = resultsMap[tool]
+  const setResults = (val: any) => setResultsMap(m => ({ ...m, [tool]: val }))
   const [loading, setLoading] = useState(false)
 
   const copy = (text: string) => {
@@ -129,7 +131,7 @@ function AIToolsPage() {
           <AIBadge />
         </div>
 
-        <TabBar tabs={TABS} active={tool} onChange={v => { setTool(v as Tool); setResults(null) }} />
+        <TabBar tabs={TABS} active={tool} onChange={v => setTool(v as Tool)} />
 
         <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
 
@@ -218,7 +220,7 @@ function AIToolsPage() {
             {loading && tool !== 'seo' && (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <div className="loading-dots flex justify-center mb-4"><span /><span /><span /></div>
-                <p className="text-muted text-sm">Gemini AI is generating your content...</p>
+                <p className="text-muted text-sm">Generating your content...</p>
               </div>
             )}
 

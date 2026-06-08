@@ -37,6 +37,7 @@ function DashboardPage() {
   const [videoTab, setVideoTab] = useState<VideoTab>('videos')
 
   const ytToken = (pData as any)?.accessToken
+  const [ytLoading, setYtLoading] = useState(false)
   const filteredVideos = (videos || []).filter(v =>
     videoTab === 'shorts' ? v.isShort : videoTab === 'videos' ? !v.isShort : false
   )
@@ -68,16 +69,18 @@ function DashboardPage() {
 
         // Real connected-channel identity + uploads
         if (ytToken) {
+          setYtLoading(true)
           apiPost('/api/analytics/youtube', { accessToken: ytToken })
             .then(r => { setChannel(r.data.channel); setVideos(r.data.videos || []) })
             .catch(() => {})
+            .finally(() => setYtLoading(false))
         }
       } finally {
         setLoading(false)
       }
     }
     load()
-  }, [activePlatform])
+  }, [activePlatform, connected, ytToken])
 
   return (
     <DashboardLayout title="Dashboard">
@@ -257,8 +260,14 @@ function DashboardPage() {
                 })}
               </div>
             ) : (
-              <EmptyState icon="📊" title={connected ? 'Loading your videos...' : 'Connect YouTube'}
-                description={connected ? 'Fetching real performance data' : 'Link your channel to see real video stats'} />
+              <EmptyState
+                icon={ytLoading ? '⏳' : connected ? '🔄' : '📊'}
+                title={ytLoading ? 'Loading your videos...' : connected && !ytToken ? 'Reconnect YouTube'
+                       : connected ? 'No videos found' : 'Connect YouTube'}
+                description={ytLoading ? 'Fetching real performance data'
+                       : connected && !ytToken ? 'Your session expired — reconnect YouTube in Settings to refresh data'
+                       : connected ? 'Upload videos and they will appear here'
+                       : 'Link your channel to see real video stats'} />
             )}
           </div>
           <div className="card">

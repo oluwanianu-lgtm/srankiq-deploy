@@ -1,58 +1,49 @@
-// pages/analytics.tsx
-import { apiPost, apiGet } from '../lib/api'
+// pages/analytics.tsx — real YouTube performance data
+import { apiPost } from '../lib/api'
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import DashboardLayout from '../components/layout/DashboardLayout'
 import { withAuth } from '../lib/withAuth'
 import { usePlatform, PLATFORMS } from '../contexts/PlatformContext'
-import { StatCard, SectionHeader, EmptyState, Skeleton, TabBar } from '../components/ui'
-import { ViewsChart, EngagementChart } from '../components/charts/AnalyticsChart'
-import { useAuth } from '../contexts/AuthContext'
+import { StatCard, SectionHeader, EmptyState, Skeleton } from '../components/ui'
 import Link from 'next/link'
-import { FiLink, FiDownload, FiRefreshCw } from 'react-icons/fi'
+import { FiLink, FiRefreshCw } from 'react-icons/fi'
 
-function generateData(days: number, base: number) {
-  return Array.from({ length: days }, (_, i) => {
-    const d = new Date()
-    d.setDate(d.getDate() - (days - i))
-    return {
-      date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      views: Math.floor(base * (0.7 + Math.random() * 0.6) + i * 500),
-      subscribers: Math.floor(base * 0.01 * (0.5 + Math.random())),
-      engagement: parseFloat((2 + Math.random() * 6).toFixed(1)),
-      likes: Math.floor(base * 0.05 * Math.random()),
-    }
-  })
-}
+const fmtN = (n: number) =>
+  n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'K' : String(n || 0)
 
 function AnalyticsPage() {
   const { activePlatform, platformData, isConnected } = usePlatform()
-  const { user } = useAuth()
   const activePlt = PLATFORMS.find(p => p.code === activePlatform)!
   const pData = platformData[activePlatform]
   const connected = isConnected(activePlatform)
+  const ytToken = (pData as any)?.accessToken
 
-  const [period, setPeriod] = useState('30')
+  const [channel, setChannel] = useState<any>(null)
   const [videos, setVideos] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
-  const chartData = generateData(parseInt(period), pData?.views || 50000)
 
   const loadData = async () => {
-    if (!connected || !pData?.accessToken || activePlatform !== 'yt') return
+    if (!connected || !ytToken || activePlatform !== 'yt') return
     setLoading(true)
     try {
-      const res = await apiPost('/api/analytics/youtube', { accessToken: pData.accessToken })
+      const res = await apiPost('/api/analytics/youtube', { accessToken: ytToken })
+      setChannel(res.data.channel)
       setVideos(res.data.videos || [])
-    } catch { } finally { setLoading(false) }
+    } catch { /* token may be expired */ } finally { setLoading(false) }
   }
 
-  useEffect(() => { loadData() }, [activePlatform, connected])
+  useEffect(() => { loadData() }, [activePlatform, connected, ytToken]) // eslint-disable-line
 
-  const periodTabs = [
-    { label: '7 Days', value: '7' },
-    { label: '30 Days', value: '30' },
-    { label: '90 Days', value: '90' },
-  ]
+  // Real, computed metrics — no random data
+  const avgEngagement = videos.length
+    ? (videos.reduce((s, v) => s + ((v.likes + v.comments) / Math.max(1, v.views)), 0) / videos.length * 100)
+    : 0
+  const avgViews = videos.length
+    ? Math.round(videos.reduce((s, v) => s + (v.views || 0), 0) / videos.length) : 0
+  const topByViews = [...videos].sort((a, b) => b.views - a.views)
+  const maxViews = Math.max(...videos.map(v => v.views), 1)
+  const maxEng = Math.max(...videos.map(v => ((v.likes + v.comments) / Math.max(1, v.views)) * 100), 1)
 
   return (
     <DashboardLayout title="Analytics">
@@ -61,14 +52,11 @@ function AnalyticsPage() {
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-xl font-bold">📊 Analytics</h1>
-            <p className="text-muted text-sm">{activePlt.name} performance overview</p>
+            <p className="text-muted text-sm">{activePlt.name} performance overview — real data</p>
           </div>
-          <div className="flex items-center gap-2">
-            <TabBar tabs={periodTabs} active={period} onChange={setPeriod} />
-            <button onClick={loadData} className="btn btn-ghost btn-sm gap-1.5">
-              <FiRefreshCw size={13} /> Refresh
-            </button>
-          </div>
+          <button onClick={loadData} className="btn btn-ghost btn-sm gap-1.5">
+            <FiRefreshCw size={13} /> Refresh
+          </button>
         </div>
 
         {!connected ? (
@@ -76,82 +64,112 @@ function AnalyticsPage() {
             <div className="text-5xl mb-4">🔗</div>
             <h3 className="text-lg font-bold mb-2">Connect {activePlt.name} to see analytics</h3>
             <p className="text-muted text-sm mb-6">
-              Link your account to see real subscriber counts, views, engagement rates and more.
+              Link your account to see real subscriber counts, views, and engagement.
             </p>
             <Link href="/settings">
-              <button className="btn btn-cyan gap-2">
-                <FiLink size={15} /> Connect {activePlt.name}
-              </button>
+              <button className="btn btn-cyan gap-2"><FiLink size={15} /> Connect {activePlt.name}</button>
             </Link>
+          </div>
+        ) : connected && !ytToken ? (
+          <div className="card border-gold/20 bg-gold/5 text-center py-12">
+            <div className="text-5xl mb-4">🔄</div>
+            <h3 className="text-lg font-bold mb-2">Reconnect YouTube</h3>
+            <p className="text-muted text-sm mb-6">
+              Your session expired. Reconnect in Settings to refresh your real analytics.
+            </p>
+            <Link href="/settings"><button className="btn btn-cyan gap-2">Reconnect →</button></Link>
           </div>
         ) : (
           <>
-            {/* Stats */}
+            {/* Real stats */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-              <StatCard label={activePlatform === 'yt' ? 'Subscribers' : 'Followers'}
-                value={pData?.subscribers ? `${(pData.subscribers/1000).toFixed(1)}K` : '—'}
-                change="+2.1% this week" color="#00f5ff" />
-              <StatCard label="Total Views"
-                value={pData?.views ? `${(pData.views/1000000).toFixed(1)}M` : '—'}
-                change="+18% this month" color="#00ff88" />
-              <StatCard label={activePlatform === 'yt' ? 'Videos' : 'Posts'}
-                value={pData?.videoCount || '—'} color="#ffc740" />
-              <StatCard label="Avg Engagement" value="4.2%" change="+0.8%" color="#ff0090" />
-              <StatCard label="SEO Score" value="78/100" change="+5 pts" color="#b4ff00" />
+              <StatCard label="Subscribers" loading={loading}
+                value={channel ? fmtN(channel.subscribers) : '—'} color="#00f5ff" />
+              <StatCard label="Total Views" loading={loading}
+                value={channel ? fmtN(channel.views) : '—'} color="#00ff88" />
+              <StatCard label="Videos" loading={loading}
+                value={channel ? String(channel.videos) : '—'} color="#ffc740" />
+              <StatCard label="Avg Views / Video" loading={loading}
+                value={videos.length ? fmtN(avgViews) : '—'} color="#ff0090" />
+              <StatCard label="Avg Engagement" loading={loading}
+                value={videos.length ? `${avgEngagement.toFixed(1)}%` : '—'} color="#b4ff00" />
             </div>
-
-            {/* Charts */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              <div className="card">
-                <SectionHeader title="📈 Views Over Time"
-                  subtitle={`Last ${period} days`} />
-                <ViewsChart data={chartData} />
-              </div>
-              <div className="card">
-                <SectionHeader title="💬 Engagement Rate"
-                  subtitle={`Last ${period} days`} />
-                <EngagementChart data={chartData} />
-              </div>
-            </div>
-
-            {/* Top content */}
-            {videos.length > 0 && (
-              <div className="card">
-                <SectionHeader title="🏆 Top Performing Content"
-                  subtitle="Your best videos by views"
-                  action={
-                    <button className="btn btn-ghost btn-sm gap-1.5">
-                      <FiDownload size={13} /> Export
-                    </button>
-                  } />
-                <div className="space-y-2">
-                  {videos.slice(0, 8).map((v: any, i: number) => (
-                    <motion.div key={v.id} initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}
-                      className="flex items-center gap-4 p-3 rounded-xl hover:bg-white/5 transition-colors">
-                      <div className="text-muted font-bold text-sm w-5 text-center">{i + 1}</div>
-                      {v.thumbnail && (
-                        <img src={v.thumbnail} alt="" className="w-16 h-9 rounded object-cover flex-shrink-0" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-white truncate">{v.title}</div>
-                        <div className="text-xs text-muted">
-                          {v.views?.toLocaleString()} views · {v.likes?.toLocaleString()} likes
-                        </div>
-                      </div>
-                      <div className="text-xs text-muted flex-shrink-0">
-                        {new Date(v.publishedAt).toLocaleDateString()}
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {loading && (
-              <div className="card space-y-3">
-                {[1,2,3,4].map(i => <Skeleton key={i} className="h-12" />)}
-              </div>
+              <div className="card space-y-3">{[1,2,3,4].map(i => <Skeleton key={i} className="h-12" />)}</div>
+            )}
+
+            {!loading && videos.length > 0 && (
+              <>
+                {/* Real charts from actual video data */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                  <div className="card">
+                    <SectionHeader title="📈 Views by Video" subtitle="Your recent videos, by views" />
+                    <div className="space-y-2.5 mt-2">
+                      {topByViews.slice(0, 8).map((v, i) => (
+                        <div key={v.id} className="flex items-center gap-3">
+                          <span className="text-xs font-bold text-muted w-4">{i + 1}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs text-white truncate mb-1">{v.title}</div>
+                            <div className="h-2 rounded-full bg-surf3 overflow-hidden">
+                              <div className="h-full rounded-full"
+                                style={{ width: `${(v.views / maxViews) * 100}%`, background: 'linear-gradient(90deg,#00f5ff,#00ff88)' }} />
+                            </div>
+                          </div>
+                          <span className="text-xs text-muted w-14 text-right">{fmtN(v.views)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="card">
+                    <SectionHeader title="💬 Engagement by Video" subtitle="(likes + comments) / views" />
+                    <div className="space-y-2.5 mt-2">
+                      {videos.slice(0, 8).map((v) => {
+                        const eng = ((v.likes + v.comments) / Math.max(1, v.views)) * 100
+                        return (
+                          <div key={v.id} className="flex items-center gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs text-white truncate mb-1">{v.title}</div>
+                              <div className="h-2 rounded-full bg-surf3 overflow-hidden">
+                                <div className="h-full rounded-full"
+                                  style={{ width: `${(eng / maxEng) * 100}%`, background: 'linear-gradient(90deg,#ff0090,#ffc740)' }} />
+                              </div>
+                            </div>
+                            <span className="text-xs text-muted w-12 text-right">{eng.toFixed(1)}%</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Top performing list */}
+                <div className="card">
+                  <SectionHeader title="🏆 Top Performing Content" subtitle="Your best videos by views" />
+                  <div className="space-y-2">
+                    {topByViews.slice(0, 8).map((v: any, i: number) => (
+                      <motion.a key={v.id} href={v.url} target="_blank" rel="noopener noreferrer"
+                        initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }}
+                        className="flex items-center gap-4 p-3 rounded-xl hover:bg-white/5 transition-colors">
+                        <div className="text-muted font-bold text-sm w-5 text-center">{i + 1}</div>
+                        {v.thumbnail && <img src={v.thumbnail} alt="" className="w-16 h-9 rounded object-cover flex-shrink-0" />}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-white truncate">{v.title}</div>
+                          <div className="text-xs text-muted">
+                            {fmtN(v.views)} views · {fmtN(v.likes)} likes · {fmtN(v.comments)} comments
+                          </div>
+                        </div>
+                        <div className="text-xs text-muted flex-shrink-0">{new Date(v.publishedAt).toLocaleDateString()}</div>
+                      </motion.a>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {!loading && videos.length === 0 && (
+              <EmptyState icon="📊" title="No video data yet"
+                description="Once your channel has videos, real performance charts appear here" />
             )}
           </>
         )}
