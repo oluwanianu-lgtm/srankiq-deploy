@@ -445,3 +445,44 @@ Return JSON only:
     throw new Error('Blueprint generation failed — try again')
   }
 }
+
+// ── AI Thumbnail Generation (gemini-2.5-flash-image) ──
+export async function generateThumbnail(data: {
+  title: string
+  style: string
+  platform: string
+}) {
+  const overlay = data.title.split(' ').slice(0, 5).join(' ').toUpperCase()
+  const prompt = `Create a high-CTR ${data.platform} video thumbnail, 16:9.
+Topic: "${data.title}"
+Style: ${data.style}
+Requirements: vibrant saturated colors with strong contrast, a single clear focal subject,
+dramatic studio lighting, bold thick readable text overlay saying "${overlay}" in large
+white letters with dark outline positioned safely away from edges, professional YouTube
+thumbnail aesthetic, eye-catching, no watermarks, no channel logos.`
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${GEMINI_API_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseModalities: ['IMAGE'],
+          imageConfig: { aspectRatio: '16:9' },
+        },
+      }),
+    }
+  )
+  const json = await res.json()
+  if (json.error) throw new Error(json.error.message || 'Image generation failed')
+
+  const parts = json.candidates?.[0]?.content?.parts || []
+  const img = parts.find((p: any) => p.inlineData?.data)
+  if (!img) throw new Error('No image returned — try a different title')
+  return {
+    mimeType: img.inlineData.mimeType || 'image/png',
+    base64: img.inlineData.data as string,
+  }
+}

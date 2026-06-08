@@ -195,7 +195,11 @@ function KeywordsPage() {
                 <b>"{best.keyword}"</b> — {best.rankingChance}% ranking chance · {best.volume} traffic · {best.competition} competition
               </div>
             </div>
-            <button onClick={() => setExpanded(best.keyword)} className="btn btn-ghost btn-sm">
+            <button onClick={() => {
+              setExpanded(best.keyword)
+              setTimeout(() => document.getElementById(`kw-card-${best.keyword}`)
+                ?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80)
+            }} className="btn btn-ghost btn-sm">
               View details
             </button>
           </motion.div>
@@ -210,7 +214,7 @@ function KeywordsPage() {
               className="card">
 
               {/* Header row */}
-              <div className="flex items-center gap-4 cursor-pointer"
+              <div id={`kw-card-${r.keyword}`} className="flex items-center gap-4 cursor-pointer"
                 onClick={() => setExpanded(open ? null : r.keyword)}>
                 <ScoreRingBig score={r.rankingChance} />
                 <div className="flex-1 min-w-0">
@@ -285,12 +289,23 @@ function KeywordsPage() {
                                     {(v.tags?.length ?? 0) > 0 ? (
                                       <>
                                         {(v.tags || []).slice(0, 6).map(t => (
-                                          <span key={t} className="px-1.5 py-0.5 rounded bg-surf2 border border-white/8
-                                                                   text-[9px] text-white/55">{t}</span>
+                                          <span key={t}
+                                            onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(t); toast.success(`Copied "${t}"`) }}
+                                            title="Click to copy"
+                                            className="px-1.5 py-0.5 rounded bg-surf2 border border-white/8 text-[9px] text-white/55
+                                                       cursor-pointer hover:border-cyan/40 hover:text-cyan transition-colors">
+                                            {t}
+                                          </span>
                                         ))}
                                         {(v.tags?.length ?? 0) > 6 && (
                                           <span className="text-[9px] text-muted">+{(v.tags!.length - 6)} more</span>
                                         )}
+                                        <span
+                                          onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText((v.tags || []).join(', ')); toast.success(`All ${v.tags!.length} tags copied!`) }}
+                                          className="px-1.5 py-0.5 rounded border border-cyan/30 text-[9px] text-cyan
+                                                     cursor-pointer hover:bg-cyan/10 transition-colors">
+                                          ⧉ Copy all
+                                        </span>
                                       </>
                                     ) : (
                                       <span className="px-1.5 py-0.5 rounded bg-red/10 border border-red/20
@@ -324,8 +339,10 @@ function KeywordsPage() {
                           <div className="flex flex-wrap gap-2">
                             {(r.recommendedTags || []).map(t => (
                               <span key={t.tag}
-                                className="badge-green text-[10px] px-2 py-1 flex items-center gap-1.5"
-                                title={`Used by ${t.usedBy} of the top 10 ranking videos`}>
+                                onClick={() => { navigator.clipboard.writeText(t.tag); toast.success(`Copied "${t.tag}"`) }}
+                                className="badge-green text-[10px] px-2 py-1 flex items-center gap-1.5
+                                           cursor-pointer hover:brightness-125 transition-all"
+                                title={`Used by ${t.usedBy} of the top 10 ranking videos — click to copy`}>
                                 {t.tag}
                                 <span className="text-[8px] opacity-60">×{t.usedBy}</span>
                               </span>

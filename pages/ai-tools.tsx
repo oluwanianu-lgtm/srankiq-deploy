@@ -9,7 +9,7 @@ import { AIBadge, ScoreRing, Spinner, TabBar } from '../components/ui'
 import toast from 'react-hot-toast'
 import { FiCopy, FiRefreshCw, FiZap, FiType, FiHash, FiAlignLeft, FiCheckCircle } from 'react-icons/fi'
 
-type Tool = 'titles' | 'description' | 'hashtags' | 'seo' | 'ideas'
+type Tool = 'titles' | 'description' | 'hashtags' | 'seo' | 'ideas' | 'thumb'
 
 // Section-scoped scanning animation: green line sweeps upward inside the panel
 function SeoLaser() {
@@ -69,7 +69,7 @@ function AIToolsPage() {
   }
 
   const runTool = async () => {
-    if (!topic && tool !== 'seo') { toast.error('Please enter a topic'); return }
+    if (!topic && tool !== 'seo') { toast.error(tool === 'thumb' ? 'Enter your video title' : 'Please enter a topic'); return }
     if (tool === 'seo' && !seoTitle) { toast.error('Please enter a title for SEO analysis'); return }
     setLoading(true)
     setResults(null)
@@ -92,6 +92,9 @@ function AIToolsPage() {
             tags: seoTags.split(',').map(t => t.trim()).filter(Boolean)
           })
           break
+        case 'thumb':
+          res = await apiPost('/api/ai/thumbnail', { title: topic, style: tone, platform: activePlt.name })
+          break
         case 'ideas':
           res = await apiPost('/api/ai/ideas', { niche: topic, platform: activePlt.name, count: 8, audience: 'general' })
           break
@@ -109,6 +112,7 @@ function AIToolsPage() {
     { label: '📄 Description', value: 'description' },
     { label: '#️⃣ Hashtags', value: 'hashtags' },
     { label: '🔬 SEO Scan', value: 'seo' },
+    { label: '🖼️ Thumbnails', value: 'thumb' },
     { label: '💡 Content Ideas', value: 'ideas' },
   ]
 
@@ -198,8 +202,8 @@ function AIToolsPage() {
               className="btn btn-cyan w-full justify-center gap-2">
               {loading ? <Spinner size={16} /> : <FiZap size={15} />}
               {loading
-                ? (tool === 'seo' ? 'Scanning...' : 'Generating...')
-                : (tool === 'seo' ? '🔬 Scan SEO →' : 'Generate with AI →')}
+                ? (tool === 'seo' ? 'Scanning...' : tool === 'thumb' ? 'Designing...' : 'Generating...')
+                : (tool === 'seo' ? '🔬 Scan SEO →' : tool === 'thumb' ? '🖼️ Generate Thumbnail →' : 'Generate with AI →')}
             </button>
           </div>
 
@@ -223,6 +227,28 @@ function AIToolsPage() {
                 <div className="text-4xl mb-3">✦</div>
                 <p className="text-muted text-sm">Fill in the inputs and click Generate to see AI results</p>
               </div>
+            )}
+
+            {/* THUMBNAIL Result */}
+            {!loading && results?.image && (
+              <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
+                className="space-y-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={results.image} alt="AI thumbnail"
+                  className="w-full rounded-xl border border-white/10" />
+                <div className="flex gap-2">
+                  <a href={results.image} download="srankiq-thumbnail.png"
+                    className="btn btn-cyan btn-sm gap-1.5 flex-1 justify-center">
+                    ⬇ Download
+                  </a>
+                  <button onClick={runTool} className="btn btn-ghost btn-sm flex-1">
+                    🔄 Regenerate
+                  </button>
+                </div>
+                <p className="text-[10px] text-muted">
+                  Tip: regenerate a few times and pick the strongest — every run is a fresh design.
+                </p>
+              </motion.div>
             )}
 
             {/* TITLES Results */}
