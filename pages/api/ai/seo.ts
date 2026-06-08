@@ -52,7 +52,11 @@ Scoring guide:
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.3, maxOutputTokens: 800 },
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 2048,
+            responseMimeType: 'application/json', // force clean JSON — no markdown, no prose
+          },
         }),
       }
     )
@@ -68,17 +72,37 @@ Scoring guide:
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
     const clean = text.replace(/```json\n?/gi, '').replace(/```\n?/gi, '').trim()
 
-    let result
+    let result: any = null
     try {
       result = JSON.parse(clean)
     } catch {
-      // Try extracting JSON from response
       const start = clean.indexOf('{')
       const end = clean.lastIndexOf('}')
       if (start !== -1 && end !== -1) {
-        result = JSON.parse(clean.slice(start, end + 1))
-      } else {
-        throw new Error('Could not parse JSON')
+        try { result = JSON.parse(clean.slice(start, end + 1)) } catch { /* fall through */ }
+      }
+    }
+
+    // If the AI response still couldn't be parsed, score with heuristics
+    // so the user always gets a useful result instead of an error.
+    if (!result) {
+      const t = String(title)
+      const d = String(description || '')
+      const tagArr = Array.isArray(tags) ? tags : String(tags || '').split(',').map(s => s.trim()).filter(Boolean)
+      const titleScore = Math.min(100, (t.length >= 40 && t.length <= 70 ? 70 : 45) + (/\d/.test(t) ? 12 : 0) + (/how|why|best|top|secret|\?/i.test(t) ? 13 : 0))
+      const descriptionScore = d.length > 200 ? 75 : d.length > 50 ? 55 : 25
+      const tagsScore = tagArr.length >= 10 ? 80 : tagArr.length >= 5 ? 60 : tagArr.length > 0 ? 40 : 15
+      const suggestions: string[] = []
+      if (t.length < 40) suggestions.push('Your title is short — aim for 40–70 characters with your main keyword near the front.')
+      if (!/\d/.test(t)) suggestions.push('Try adding a number (e.g. "5 ways…") — numbered titles tend to get more clicks.')
+      if (d.length < 100) suggestions.push('Add a fuller description (200+ chars) with keywords, timestamps, and a call to action.')
+      if (tagArr.length < 8) suggestions.push('Add more tags — a mix of broad and specific terms (aim for 10–15).')
+      if (!suggestions.length) suggestions.push('Solid foundation — test variations of your title to push click-through higher.')
+      result = {
+        score: Math.round(titleScore * 0.4 + descriptionScore * 0.3 + tagsScore * 0.3),
+        titleScore, descriptionScore, tagsScore,
+        viralScore: Math.round((titleScore + tagsScore) / 2),
+        engagementPrediction: 'Medium', suggestions,
       }
     }
 
