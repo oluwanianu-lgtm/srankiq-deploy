@@ -127,8 +127,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const ages = vids.map((v: any) => (Date.now() - new Date(v.publishedAt).getTime()) / (30 * 864e5))
       const avgAgeMonths = ages.length ? Math.round(ages.reduce((s: number, x: number) => s + x, 0) / ages.length) : 0
       const freq: Record<string, number> = {}
-      vids.forEach((v: any) => (v.tags || []).forEach((t: string) => { const k = t.toLowerCase().trim(); if (k) freq[k] = (freq[k] || 0) + 1 }))
-      const recommendedTags = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 18).map(([tag, n]) => ({ tag, usedBy: n }))
+      const tagViews: Record<string, number[]> = {}
+      vids.forEach((v: any) => (v.tags || []).forEach((t: string) => {
+        const k = t.toLowerCase().trim()
+        if (k) { freq[k] = (freq[k] || 0) + 1; (tagViews[k] = tagViews[k] || []).push(v.views || 0) }
+      }))
+      // estimated monthly search volume: derived from how often a tag appears across top videos
+      // and the average views those videos pull. Heuristic (labeled estimate, not from API).
+      const recommendedTags = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 30).map(([tag, n]) => {
+        const vs = tagViews[tag] || []
+        const avgV = vs.length ? vs.reduce((s, x) => s + x, 0) / vs.length : 0
+        // estimate: frequency weight × view-demand signal, scaled to a plausible monthly-search range
+        const estVolume = Math.round((n / vids.length) * Math.sqrt(avgV) * 9)
+        return { tag, usedBy: n, estVolume }
+      })
       const chSeen: Record<string, { name: string; views: number; id: string }> = {}
       vids.forEach((v: any) => { if (v.channelId) { if (!chSeen[v.channelId]) chSeen[v.channelId] = { name: v.channel, views: 0, id: v.channelId }; chSeen[v.channelId].views += v.views || 0 } })
       const topChannels = Object.values(chSeen).sort((a, b) => b.views - a.views).slice(0, 6)

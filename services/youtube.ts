@@ -679,11 +679,16 @@ export async function batchVideoStats(videoIds: string[]) {
     // outlier multiplier — views vs a typical baseline for the channel size
     const baseline = Math.max(1000, subs * 0.1)
     const outlier = +(views / baseline).toFixed(1)
+    // parse ISO 8601 duration (PT#M#S) to seconds
+    const dur = v.contentDetails?.duration || ''
+    const m = dur.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/)
+    const durationSec = m ? (parseInt(m[1]||'0')*3600 + parseInt(m[2]||'0')*60 + parseInt(m[3]||'0')) : 0
     return {
       id: v.id, views, vph, subs,
       tags: v.snippet.tags || [], tagCount: (v.snippet.tags || []).length,
       outlier: Math.min(99, outlier),
       ageDays: Math.round(hours / 24),
+      durationSec,
     }
   })
 }
