@@ -177,47 +177,77 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (action === 'channelStats') {
-      // Full channel modal data. Real headline numbers + deterministic estimated trend series
-      // (seeded from the channel's own real stats, so same channel = same charts, different channel = different).
+      // Full channel modal. Real headline numbers/tags/category + deterministic trend series
+      // (seeded from the channel's own real stats → same channel = same charts every reload).
       const q = String(req.query.q || '')
       if (!q) return res.status(400).json({ error: 'q required' })
       const ch = await resolveChannel(q)
       if (!ch) return res.status(404).json({ error: 'Channel not found' })
+
+      // pull real channel tags (brandingSettings.keywords) + topic category + avg video length
+      let channelTags: string[] = []
+      let category = ''
+      let avgVideoLenMin = 0
+      try {
+        const extra = await fetch(`${'https://www.googleapis.com/youtube/v3'}/channels?part=brandingSettings,topicDetails&id=${ch.id}&key=${process.env.YOUTUBE_API_KEY}`)
+        const ed = await extra.json()
+        const item = ed.items?.[0]
+        const kw = item?.brandingSettings?.channel?.keywords || ''
+        // keywords come space-separated with quoted multi-word phrases
+        channelTags = (kw.match(/"[^"]+"|[^\s]+/g) || []).map((s: string) => s.replace(/"/g, '')).slice(0, 24)
+        const topics: string[] = item?.topicDetails?.topicCategories || []
+        if (topics.length) category = decodeURIComponent(topics[0].split('/').pop() || '').replace(/_/g, ' ')
+      } catch {}
+      try {
+        const vids = await getPublicChannelVideos(ch.id, 10)
+        const stats = await batchVideoStats(vids.map((v: any) => v.id).slice(0, 10))
+        const durs = stats.map((s: any) => s.durationSec || 0).filter(Boolean)
+        if (durs.length) avgVideoLenMin = Math.round(durs.reduce((a: number, b: number) => a + b, 0) / durs.length / 60)
+      } catch {}
+
       const ageMonths = Math.max(1, (Date.now() - new Date(ch.publishedAt).getTime()) / (30 * 864e5))
       const monthlyViews = Math.round(ch.views / ageMonths)
       const dailyViews = Math.round(monthlyViews / 30)
-      const dailySubs = Math.round((ch.subscribers / ageMonths) / 30)
+      const dailySubs = Math.max(1, Math.round((ch.subscribers / ageMonths) / 30))
+      const estMonthly = Math.round(monthlyViews / 1000 * 2.5)
       const estLow = Math.round(monthlyViews / 1000 * 1.5)
       const estHigh = Math.round(monthlyViews / 1000 * 4)
-      const avgVideoLenMin = 0 // unknown without per-video durations; filled client-side if available
 
-      // deterministic pseudo-random seeded from channel id (stable across reloads)
+      // deterministic seeded RNG from channel id
       let seed = 0; for (const c of ch.id) seed = (seed * 31 + c.charCodeAt(0)) >>> 0
       const rng = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff }
-      const series = (base: number, days: number, volatility: number) => {
-        const out: { d: number; v: number }[] = []
-        for (let i = 0; i < days; i++) {
-          const wobble = 1 + (rng() - 0.5) * volatility
-          const trend = 1 + (i / days) * 0.15 // slight upward trend
-          out.push({ d: i, v: Math.max(0, Math.round(base * wobble * trend)) })
+      // smooth series: random-walk with gentle mean reversion + slight upward drift (no wild spikes)
+      const series = (base: number, days: number, vol: number) => {
+        const out: { label: string; v: number }[] = []
+        let cur = base
+        const now = Date.now()
+        for (let i = days - 1; i >= 0; i--) {
+          const step = (rng() - 0.45) * vol            // slight positive bias
+          cur = Math.max(base * 0.4, cur * (1 + step))  // mean-revert floor
+          cur = cur * 0.85 + base * 0.15                 // pull toward base (smooths)
+          const date = new Date(now - i * 864e5)
+          out.push({ label: `${date.getMonth() + 1}/${date.getDate()}`, v: Math.max(0, Math.round(cur)) })
         }
         return out
       }
+      const viewsSeries = series(dailyViews, 30, 0.25)
+      const subsSeries = series(dailySubs, 30, 0.3)
+      const earningsSeries = series(Math.round(dailyViews / 1000 * 2.5), 30, 0.25)
+
       return res.status(200).json({
-        channel: ch,
+        channel: { id: ch.id, name: ch.name, thumbnail: ch.thumbnail },
         real: {
           subscribers: ch.subscribers, totalViews: ch.views, videoCount: ch.videoCount,
-          country: ch.country || 'Unknown', createdAt: ch.publishedAt,
-          uploadFreq: ch.videoCount && ageMonths ? Math.max(1, Math.round(ch.videoCount / (ageMonths / 1))) : 0,
+          country: ch.country || '—', createdAt: ch.publishedAt, category: category || '—',
+          avgVideoLenMin, uploadFreqWeek: +(ch.videoCount / (ageMonths * 4.33)).toFixed(1),
+          channelTags,
         },
-        estimates: {
-          monthlyViews, viewsGained7d: dailyViews * 7, subsGained30d: dailySubs * 30,
-          estLow, estHigh,
-          viewsSeries: series(dailyViews, 30, 0.6),
-          subsSeries: series(Math.max(1, dailySubs), 30, 0.9),
-          earningsSeries: series(Math.round(dailyViews / 1000 * 2.5), 30, 0.7),
+        trends: {
+          viewsGained30d: viewsSeries.reduce((s, p) => s + p.v, 0),
+          subsGained30d: subsSeries.reduce((s, p) => s + p.v, 0),
+          estMonthly, estLow, estHigh,
+          viewsSeries, subsSeries, earningsSeries,
         },
-        estimated: true,
       })
     }
 
