@@ -253,22 +253,56 @@ async function handler(req: ExtRequest, res: NextApiResponse) {
     }
 
     if (action === 'channelNiche') {
-      // auto-detect a channel's niche from its recent video tags/titles
+      // auto-detect a channel's niche from recent video tags + titles
       const id = String(req.query.id || '')
+      const name = String(req.query.name || '')
       if (!id) return res.status(400).json({ error: 'id required' })
-      const vids = await getPublicChannelVideos(id, 15)
+      const vids = await getPublicChannelVideos(id, 12)
       const freq: Record<string, number> = {}
       vids.forEach((v: any) => (v.tags || []).forEach((t: string) => { const k = t.toLowerCase().trim(); if (k.length > 2) freq[k] = (freq[k] || 0) + 1 }))
-      const topTags = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([t]) => t)
-      let niche = topTags[0] || ''
+      const topTags = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([t]) => t)
+      const titles = vids.slice(0, 8).map((v: any) => v.title).filter(Boolean)
+      let niche = ''
       try {
         const raw = await callGemini(
-          `These are a YouTube channel's most common video tags: ${topTags.join(', ')}. ` +
-          `In 2-4 words, what niche is this channel? Return ONLY the niche name, nothing else.`
+          `A YouTube channel called "${name || 'this channel'}" has these recent video titles: ${titles.join(' | ')}. ` +
+          `Common tags: ${topTags.slice(0, 10).join(', ') || 'none'}. ` +
+          `What is this channel's CONTENT NICHE in 2-4 words (e.g. "Personal Finance", "Gaming Tutorials", "AI Automation")? ` +
+          `Rules: describe the TOPIC/CATEGORY, NOT the channel name. Never return the channel's name "${name}". Return ONLY the niche, nothing else.`
         )
-        if (raw && raw.trim().length < 40) niche = raw.trim().replace(/["\n.]/g, '')
+        let cleaned = (raw || '').trim().replace(/["\n.]/g, '')
+        // reject if the AI just echoed the channel name
+        const nameL = name.toLowerCase().replace(/[^a-z0-9]/g, '')
+        const nicheL = cleaned.toLowerCase().replace(/[^a-z0-9]/g, '')
+        if (cleaned.length > 0 && cleaned.length < 40 && nameL && nicheL.includes(nameL) === false && nameL.includes(nicheL) === false) {
+          niche = cleaned
+        } else if (cleaned.length > 0 && cleaned.length < 40 && !nameL) {
+          niche = cleaned
+        }
       } catch {}
+      // fallback to most common tag if AI failed or returned the name
+      if (!niche) niche = topTags[0] || 'General'
       return res.status(200).json({ niche, topTags })
+    }
+
+    if (action === 'trendingTags') {
+      // home page: show top tags creators are using on currently-popular videos
+      // so creators know which tags help reach the recommended/trending feed.
+      const region = String(req.query.region || 'US')
+      try {
+        const r = await fetch(`${'https://www.googleapis.com/youtube/v3'}/videos?part=snippet&chart=mostPopular&maxResults=40&regionCode=${region}&key=${process.env.YOUTUBE_API_KEY}`)
+        const d = await r.json()
+        const items = d.items || []
+        const freq: Record<string, number> = {}
+        items.forEach((v: any) => (v.snippet?.tags || []).forEach((t: string) => {
+          const k = t.toLowerCase().trim(); if (k.length > 2 && k.length < 32) freq[k] = (freq[k] || 0) + 1
+        }))
+        const tags = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 30).map(([tag, n]) => ({ tag, usedBy: n }))
+        // also surface trending video titles' common words as "topics"
+        return res.status(200).json({ tags, sampleSize: items.length })
+      } catch (e: any) {
+        return res.status(200).json({ tags: [], error: e.message })
+      }
     }
 
     return res.status(400).json({ error: 'unknown action' })
