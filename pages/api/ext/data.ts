@@ -176,6 +176,51 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json(result)
     }
 
+    if (action === 'channelStats') {
+      // Full channel modal data. Real headline numbers + deterministic estimated trend series
+      // (seeded from the channel's own real stats, so same channel = same charts, different channel = different).
+      const q = String(req.query.q || '')
+      if (!q) return res.status(400).json({ error: 'q required' })
+      const ch = await resolveChannel(q)
+      if (!ch) return res.status(404).json({ error: 'Channel not found' })
+      const ageMonths = Math.max(1, (Date.now() - new Date(ch.publishedAt).getTime()) / (30 * 864e5))
+      const monthlyViews = Math.round(ch.views / ageMonths)
+      const dailyViews = Math.round(monthlyViews / 30)
+      const dailySubs = Math.round((ch.subscribers / ageMonths) / 30)
+      const estLow = Math.round(monthlyViews / 1000 * 1.5)
+      const estHigh = Math.round(monthlyViews / 1000 * 4)
+      const avgVideoLenMin = 0 // unknown without per-video durations; filled client-side if available
+
+      // deterministic pseudo-random seeded from channel id (stable across reloads)
+      let seed = 0; for (const c of ch.id) seed = (seed * 31 + c.charCodeAt(0)) >>> 0
+      const rng = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff }
+      const series = (base: number, days: number, volatility: number) => {
+        const out: { d: number; v: number }[] = []
+        for (let i = 0; i < days; i++) {
+          const wobble = 1 + (rng() - 0.5) * volatility
+          const trend = 1 + (i / days) * 0.15 // slight upward trend
+          out.push({ d: i, v: Math.max(0, Math.round(base * wobble * trend)) })
+        }
+        return out
+      }
+      return res.status(200).json({
+        channel: ch,
+        real: {
+          subscribers: ch.subscribers, totalViews: ch.views, videoCount: ch.videoCount,
+          country: ch.country || 'Unknown', createdAt: ch.publishedAt,
+          uploadFreq: ch.videoCount && ageMonths ? Math.max(1, Math.round(ch.videoCount / (ageMonths / 1))) : 0,
+        },
+        estimates: {
+          monthlyViews, viewsGained7d: dailyViews * 7, subsGained30d: dailySubs * 30,
+          estLow, estHigh,
+          viewsSeries: series(dailyViews, 30, 0.6),
+          subsSeries: series(Math.max(1, dailySubs), 30, 0.9),
+          earningsSeries: series(Math.round(dailyViews / 1000 * 2.5), 30, 0.7),
+        },
+        estimated: true,
+      })
+    }
+
     if (action === 'channelNiche') {
       // auto-detect a channel's niche from its recent video tags/titles
       const id = String(req.query.id || '')
