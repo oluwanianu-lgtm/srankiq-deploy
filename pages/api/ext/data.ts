@@ -1,15 +1,10 @@
-// pages/api/ext/data.ts — PUBLIC (CORS) endpoint powering the SRankIQ Chrome extension.
-import type { NextApiRequest, NextApiResponse } from 'next'
+// pages/api/ext/data.ts — SRankIQ Chrome extension endpoint (requires SRankIQ login).
+import type { NextApiResponse } from 'next'
 import {
   resolveChannel, getPublicChannelVideos, searchTopVideos, getVideoDetails, batchVideoStats,
 } from '../../../services/youtube'
 import { callGemini, safeJSON } from '../../../services/gemini'
-
-function cors(res: NextApiResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
-}
+import { withExtAuth, ExtRequest } from '../../../lib/extAuth'
 
 function monetizationEstimate(subs: number, views: number, videoCount: number) {
   const meetsSubs = subs >= 1000
@@ -55,11 +50,17 @@ function deriveRelated(vids: any[], seed: string) {
     .map(([phrase, n]) => ({ keyword: phrase, score: Math.min(99, 40 + n * 8) }))
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  cors(res)
-  if (req.method === 'OPTIONS') return res.status(200).end()
+// Free users get core lookups; paid users unlock the money-maker features.
+const PAID_ONLY = new Set(['suggestNiche', 'channelStats', 'similarChannels', 'keyword'])
+
+async function handler(req: ExtRequest, res: NextApiResponse) {
   try {
     const action = String(req.query.action || '')
+
+    // gate paid-only actions
+    if (PAID_ONLY.has(action) && !req.isPaid) {
+      return res.status(402).json({ error: 'upgrade_required', message: 'This feature is part of SRankIQ Pro. Upgrade to unlock.', plan: req.plan })
+    }
 
     if (action === 'channel') {
       const q = String(req.query.q || '')
@@ -275,3 +276,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ error: err.message })
   }
 }
+
+export default withExtAuth(handler)

@@ -54,8 +54,22 @@ function DashboardPage() {
     else if (channel?.name) setNiche(channel.name)
   }, [videos, channel]) // eslint-disable-line
 
-  const ytToken = (pData as any)?.accessToken
+  // Get a always-valid YouTube token (auto-refreshed server-side). Falls back to
+  // any legacy stored token so existing connections keep working.
+  const [ytToken, setYtToken] = useState<string | null>((pData as any)?.accessToken || null)
   const [ytLoading, setYtLoading] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await apiGet('/api/auth/youtube/token')
+        if (!cancelled && res.data?.connected && res.data?.accessToken) {
+          setYtToken(res.data.accessToken)
+        }
+      } catch { /* keep legacy token */ }
+    })()
+    return () => { cancelled = true }
+  }, [])
 
   // Lazy-loaded content per tab
   const [tabData, setTabData] = useState<Record<string, any[]>>({})

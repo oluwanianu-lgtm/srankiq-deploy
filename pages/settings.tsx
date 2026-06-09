@@ -1,5 +1,5 @@
 // pages/settings.tsx
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { apiPost } from '../lib/api'
 import { motion } from 'framer-motion'
 import DashboardLayout from '../components/layout/DashboardLayout'
@@ -24,6 +24,17 @@ function SettingsPage() {
     displayName: profile?.displayName || '',
   })
 
+  // Handle return from the YouTube OAuth redirect flow
+  useEffect(() => {
+    const yt = new URLSearchParams(window.location.search).get('yt')
+    if (!yt) return
+    if (yt === 'connected') toast.success('✅ YouTube connected — you\'ll stay signed in.')
+    else if (yt === 'cancelled') toast('YouTube connection cancelled.')
+    else if (yt === 'error') toast.error('Could not connect YouTube. Please try again.')
+    // clean the URL
+    window.history.replaceState({}, '', '/settings')
+  }, [])
+
   const saveProfile = async () => {
     setSaving(true)
     try {
@@ -34,72 +45,13 @@ function SettingsPage() {
   }
 
   const connectYouTube = async () => {
-    // Wait up to ~3s for the Google script to finish loading before giving up
-    let google = (window as any).google
-    for (let i = 0; i < 15 && !google?.accounts?.oauth2; i++) {
-      await new Promise(r => setTimeout(r, 200))
-      google = (window as any).google
-    }
-    if (!google?.accounts?.oauth2) {
-      toast.error('Google Sign-In is still loading — please wait a moment and try again.')
+    if (!user?.uid) {
+      toast.error('Please sign in first.')
       return
     }
-
+    // Server-side OAuth code flow → gets a refresh token → stays connected (no 1-hour expiry).
     setConnecting(true)
-
-    const client = google.accounts.oauth2.initTokenClient({
-      client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
-      scope: [
-        'https://www.googleapis.com/auth/youtube.readonly',
-        'https://www.googleapis.com/auth/youtube.upload',
-        'https://www.googleapis.com/auth/youtube.force-ssl', // edit video metadata (My Videos)
-        'https://www.googleapis.com/auth/yt-analytics.readonly',
-      ].join(' '),
-      callback: async (resp: any) => {
-        if (resp.error) {
-          toast.error(`Auth error: ${resp.error}`)
-          setConnecting(false)
-          return
-        }
-        if (!resp.access_token) {
-          toast.error('No access token received')
-          setConnecting(false)
-          return
-        }
-
-        try {
-          const res = await apiPost('/api/analytics/youtube', { accessToken: resp.access_token })
-          const data = res.data
-          const channel = data.channel
-
-          if (!channel) throw new Error('No channel data returned')
-
-          // Save to Firebase — including channelId so dashboard can fetch videos
-          await connectPlatform('yt', {
-            connected: true,
-            accessToken: resp.access_token,
-            channelId: channel.id,           // ← critical: save the real channel ID
-            channelName: channel.name,
-            subscribers: channel.subscribers,
-            views: channel.views,
-            videoCount: channel.videos,
-            profilePic: channel.thumbnail,
-          })
-
-          toast.success(`✅ YouTube connected! Welcome, ${channel.name}`)
-        } catch (err: any) {
-          toast.error(err.message || 'Could not fetch channel data')
-        } finally {
-          setConnecting(false)
-        }
-      },
-      error_callback: (err: any) => {
-        toast.error('Google auth cancelled')
-        setConnecting(false)
-      },
-    })
-
-    client.requestAccessToken()
+    window.location.href = `/api/auth/youtube/start?uid=${encodeURIComponent(user.uid)}`
   }
 
   const connectTikTok = () => {
