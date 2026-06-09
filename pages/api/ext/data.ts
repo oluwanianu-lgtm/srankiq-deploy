@@ -114,8 +114,15 @@ async function handler(req: ExtRequest, res: NextApiResponse) {
     if (action === 'keyword') {
       const q = String(req.query.q || '')
       if (!q) return res.status(400).json({ error: 'q required' })
-      const data = await searchTopVideos(q)
-      const vids = data.videos || []
+      // fetch multiple pages (up to 3 = ~150 videos) so tag usage counts are meaningful (×10–40, not ×2)
+      let vids: any[] = []
+      let token: string | undefined = undefined
+      for (let page = 0; page < 3; page++) {
+        const data: any = await searchTopVideos(q, 'US', token)
+        vids = vids.concat(data.videos || [])
+        token = data.nextPageToken || undefined
+        if (!token) break
+      }
       const views = vids.map((v: any) => v.views || 0)
       const avgViews = views.length ? Math.round(views.reduce((s: number, x: number) => s + x, 0) / views.length) : 0
       const highestViews = views.length ? Math.max(...views) : 0
@@ -150,7 +157,7 @@ async function handler(req: ExtRequest, res: NextApiResponse) {
     }
 
     if (action === 'batch') {
-      const ids = String(req.query.ids || '').split(',').filter(Boolean).slice(0, 20)
+      const ids = String(req.query.ids || '').split(',').filter(Boolean).slice(0, 50)
       if (!ids.length) return res.status(400).json({ error: 'ids required' })
       return res.status(200).json({ videos: await batchVideoStats(ids) })
     }
@@ -290,14 +297,14 @@ async function handler(req: ExtRequest, res: NextApiResponse) {
       // so creators know which tags help reach the recommended/trending feed.
       const region = String(req.query.region || 'US')
       try {
-        const r = await fetch(`${'https://www.googleapis.com/youtube/v3'}/videos?part=snippet&chart=mostPopular&maxResults=40&regionCode=${region}&key=${process.env.YOUTUBE_API_KEY}`)
+        const r = await fetch(`${'https://www.googleapis.com/youtube/v3'}/videos?part=snippet&chart=mostPopular&maxResults=50&regionCode=${region}&key=${process.env.YOUTUBE_API_KEY}`)
         const d = await r.json()
         const items = d.items || []
         const freq: Record<string, number> = {}
         items.forEach((v: any) => (v.snippet?.tags || []).forEach((t: string) => {
           const k = t.toLowerCase().trim(); if (k.length > 2 && k.length < 32) freq[k] = (freq[k] || 0) + 1
         }))
-        const tags = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 30).map(([tag, n]) => ({ tag, usedBy: n }))
+        const tags = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 50).map(([tag, n]) => ({ tag, usedBy: n }))
         // also surface trending video titles' common words as "topics"
         return res.status(200).json({ tags, sampleSize: items.length })
       } catch (e: any) {

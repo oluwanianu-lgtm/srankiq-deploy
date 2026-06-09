@@ -361,7 +361,7 @@ export async function searchTrendingByCategory(
 // ── Top videos for any search query (Trends in-page search) ──
 export async function searchTopVideos(queryStr: string, regionCode = 'US', pageToken?: string) {
   const publishedAfter = new Date(Date.now() - 365 * 24 * 3600 * 1000).toISOString()
-  let url = `${YT_BASE}/search?part=snippet&type=video&order=viewCount&maxResults=24` +
+  let url = `${YT_BASE}/search?part=snippet&type=video&order=viewCount&maxResults=50` +
     `&q=${encodeURIComponent(queryStr)}&publishedAfter=${publishedAfter}` +
     `&regionCode=${regionCode}&key=${API_KEY}`
   if (pageToken) url += `&pageToken=${pageToken}`
