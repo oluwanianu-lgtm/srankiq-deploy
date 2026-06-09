@@ -100,11 +100,14 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
   const disconnectPlatform = async (code: PlatformCode) => {
     if (!user) return
     const ref = doc(db, 'users', user.uid)
-    await updateDoc(ref, {
+    const updates: any = {
       [`connectedPlatforms.${code}`]: false,
       [`platformTokens.${code}`]: '',
       [`channelData.${code}`]: {},
-    })
+    }
+    // also clear the server-side youtube field (refresh token + connection)
+    if (code === 'yt') updates.youtube = { connected: false, refreshToken: null, accessToken: null }
+    await updateDoc(ref, updates)
   }
 
   const isConnected = (code: PlatformCode) => !!platformData[code]?.connected

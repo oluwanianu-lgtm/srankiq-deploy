@@ -77,6 +77,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         profilePic: channel?.thumbnail || null,
         updatedAt: Date.now(),
       },
+      // ALSO write the shape the dashboard/PlatformContext reads, so it shows as connected
+      connectedPlatforms: { yt: true },
+      platformTokens: { yt: tokens.access_token },
+      channelData: {
+        yt: {
+          id: channel?.id || null,
+          name: channel?.name || null,
+          subscribers: channel?.subscribers || 0,
+          views: channel?.views || 0,
+          videos: channel?.videos || 0,
+          thumbnail: channel?.thumbnail || null,
+        },
+      },
     }, { merge: true })
 
     return res.redirect(`/settings?yt=connected`)
