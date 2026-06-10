@@ -118,10 +118,16 @@ async function handler(req: ExtRequest, res: NextApiResponse) {
       let vids: any[] = []
       let token: string | undefined = undefined
       for (let page = 0; page < 3; page++) {
-        const data: any = await searchTopVideos(q, 'US', token)
-        vids = vids.concat(data.videos || [])
-        token = data.nextPageToken || undefined
-        if (!token) break
+        try {
+          const data: any = await searchTopVideos(q, 'US', token)
+          vids = vids.concat(data.videos || [])
+          token = data.nextPageToken || undefined
+          if (!token) break
+        } catch (e) {
+          // if a later page fails (e.g. quota), keep what we already have rather than failing the whole request
+          if (page === 0) throw e
+          break
+        }
       }
       const views = vids.map((v: any) => v.views || 0)
       const avgViews = views.length ? Math.round(views.reduce((s: number, x: number) => s + x, 0) / views.length) : 0
