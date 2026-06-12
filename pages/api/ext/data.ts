@@ -121,7 +121,7 @@ function deriveRelated(vids: any[], seed: string) {
 }
 
 // Free users get core lookups; paid users unlock the money-maker features.
-const PAID_ONLY = new Set(['suggestNiche', 'channelStats', 'similarChannels', 'keyword'])
+const PAID_ONLY = new Set(['suggestNiche', 'channelStats', 'similarChannels', 'keyword', 'optimize'])
 
 async function handler(req: ExtRequest, res: NextApiResponse) {
   try {
@@ -263,6 +263,48 @@ async function handler(req: ExtRequest, res: NextApiResponse) {
       const ids = String(req.query.ids || '').split(',').filter(Boolean).slice(0, 50)
       if (!ids.length) return res.status(400).json({ error: 'ids required' })
       return res.status(200).json({ videos: await batchVideoStats(ids) })
+    }
+
+    if (action === 'optimize') {
+      // AI title / description help for the creator's OWN video, used by the Studio panel.
+      // Guardrail: stay truthful to the topic, invent nothing, no fabricated claims/quotes about real people.
+      const kind = String(req.query.kind || 'title')
+      const q = String(req.query.q || '')       // current title (for title) or current description (for description)
+      const ctx = String(req.query.ctx || '')   // the other field as context
+      if (!q && !ctx) return res.status(400).json({ error: 'q or ctx required' })
+
+      if (kind === 'description') {
+        const title = (ctx || q).slice(0, 120)
+        const current = q.slice(0, 800)
+        const raw = await callGemini(
+          `You are a YouTube SEO assistant helping a creator with THEIR OWN video titled "${title}". ` +
+          (current ? `Their current description: "${current}". ` : 'They have no description yet. ') +
+          `Write one improved, SEO-friendly description: a strong first two lines that front-load the topic, ` +
+          `natural keywords, a line for links, and 3 relevant hashtags. ` +
+          `Rules: stay truthful to the actual topic, invent no facts, no fabricated quotes or claims about real people. ` +
+          `Return ONLY valid JSON: {"description":"...","hashtags":["#one","#two","#three"]}`
+        )
+        const parsed: any = safeJSON(raw) || {}
+        return res.status(200).json({ kind, description: String(parsed.description || ''), hashtags: (parsed.hashtags || []).slice(0, 3) })
+      }
+
+      // default: title
+      const current = q.slice(0, 120)
+      const desc = ctx.slice(0, 400)
+      const raw = await callGemini(
+        `You are a YouTube SEO assistant helping a creator with THEIR OWN video. ` +
+        `Working title: "${current}". ` + (desc ? `Description so far: "${desc}". ` : '') +
+        `Suggest 5 stronger, more clickable, SEO-optimized titles for THIS specific video. ` +
+        `Rules: stay truthful to the actual topic, do not invent facts, events, quotes, or claims about real people, ` +
+        `keep each title under 70 characters, no misleading clickbait. ` +
+        `Return ONLY valid JSON: {"titles":[{"text":"...","why":"short reason"}]}`
+      )
+      const parsed: any = safeJSON(raw) || {}
+      const titles = (parsed.titles || [])
+        .map((t: any) => ({ text: String(t.text || '').slice(0, 100), why: String(t.why || '').slice(0, 90) }))
+        .filter((t: any) => t.text)
+        .slice(0, 5)
+      return res.status(200).json({ kind, titles })
     }
 
     if (action === 'suggestNiche') {
