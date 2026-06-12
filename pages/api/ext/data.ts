@@ -121,7 +121,7 @@ function deriveRelated(vids: any[], seed: string) {
 }
 
 // Free users get core lookups; paid users unlock the money-maker features.
-const PAID_ONLY = new Set(['suggestNiche', 'channelStats', 'similarChannels', 'keyword', 'optimize'])
+const PAID_ONLY = new Set(['suggestNiche', 'channelStats', 'similarChannels', 'keyword', 'optimize', 'thumbnail'])
 
 async function handler(req: ExtRequest, res: NextApiResponse) {
   try {
@@ -305,6 +305,59 @@ async function handler(req: ExtRequest, res: NextApiResponse) {
         .filter((t: any) => t.text)
         .slice(0, 5)
       return res.status(200).json({ kind, titles })
+    }
+
+    if (action === 'thumbnail') {
+      // AI thumbnail image generation for the creator's OWN video, used by the Studio panel.
+      // Two steps: craft a vivid visual concept from the topic (text model), then render it (image model).
+      // Guardrails: no text baked into the image, no real/recognizable public figures, no logos.
+      const q = String(req.query.q || '')           // video title
+      const ctx = String(req.query.ctx || '')        // optional description for context
+      if (!q) return res.status(400).json({ error: 'q required' })
+
+      // Image model + key. Defaults to the stable "Nano Banana"; swap IMG_MODEL to
+      // 'gemini-3.1-flash-image' for higher quality if your key/project has access.
+      // KEY: set whichever of these your server already uses for Gemini.
+      const IMG_MODEL = 'gemini-2.5-flash-image'
+      const KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY || ''
+      if (!KEY) return res.status(500).json({ error: 'no_image_key', message: 'Image generation needs a Google API key on the server (set GEMINI_API_KEY).' })
+
+      // 1) concept from the topic
+      let concept = ''
+      try {
+        concept = await callGemini(
+          `Turn this YouTube video into ONE vivid thumbnail image concept. Title: "${q}". ` +
+          (ctx ? `Context: "${ctx.slice(0, 300)}". ` : '') +
+          `Describe a single striking, high-contrast, photo-real scene that represents the topic and stops the scroll. ` +
+          `Rules: no text or words in the image, no real or recognizable public figures or celebrities, no logos. ` +
+          `Answer with ONLY the image description, 1 to 2 sentences.`
+        )
+      } catch { /* fall back to a templated concept below */ }
+      concept = (concept || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 400) || `A bold, high-contrast visual that represents: ${q}`
+
+      // 2) render the image
+      const prompt =
+        `Professional YouTube thumbnail, 16:9 widescreen, cinematic lighting, vibrant and high-contrast, sharp focus, dramatic and eye-catching. ` +
+        `${concept}. No text, no words, no letters, no logos, no watermark. Do not depict real public figures or celebrities.`
+      try {
+        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${IMG_MODEL}:generateContent`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': KEY },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'] } }),
+        })
+        if (!r.ok) {
+          const detail = await r.text().catch(() => '')
+          return res.status(502).json({ error: 'image_failed', message: 'Image model returned an error.', detail: detail.slice(0, 300) })
+        }
+        const data: any = await r.json()
+        const parts = data?.candidates?.[0]?.content?.parts || []
+        const inline = (parts.find((p: any) => p.inlineData || p.inline_data) || {})
+        const blob = inline.inlineData || inline.inline_data
+        if (!blob?.data) return res.status(502).json({ error: 'no_image', message: 'No image returned. The prompt may have been blocked. Try a simpler title.' })
+        return res.status(200).json({ kind: 'thumbnail', mimeType: blob.mimeType || blob.mime_type || 'image/png', data: blob.data, concept })
+      } catch (e: any) {
+        return res.status(502).json({ error: 'image_failed', message: 'Could not reach the image model.', detail: String(e?.message || '').slice(0, 200) })
+      }
     }
 
     if (action === 'suggestNiche') {
