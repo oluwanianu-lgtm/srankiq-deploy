@@ -6,17 +6,87 @@ import {
 import { callGemini, safeJSON } from '../../../services/gemini'
 import { withExtAuth, ExtRequest } from '../../../lib/extAuth'
 
-function monetizationEstimate(subs: number, views: number, videoCount: number) {
-  const meetsSubs = subs >= 1000
-  const enoughVideos = videoCount >= 3
-  let likelihood = 0
-  if (meetsSubs) likelihood += 50
-  if (subs >= 10000) likelihood += 20
-  if (views >= 500000) likelihood += 20
-  if (enoughVideos) likelihood += 10
-  likelihood = Math.min(100, likelihood)
-  return { eligible: meetsSubs && enoughVideos, likelihood,
-    note: 'Estimate from public signals (subs, views).' }
+// ---- Monetization eligibility estimate ----
+// IMPORTANT: this is INFERENCE from public signals, never YouTube's real status.
+// The Data API exposes none of the gating metrics: no watch hours, no 90-day Shorts-view
+// window, no monetization flag. So we sample recent uploads, classify the channel as
+// Shorts vs long-form, and approximate 90-day Shorts views to compare against the real bar.
+// Current YPP thresholds (verified 2026):
+//   Full ad revenue: 1,000 subs + (4,000 public watch hours / 12mo  OR  10M public Shorts views / 90d)
+//   Fan funding:       500 subs + (3,000 watch hours / 12mo          OR  3M Shorts views / 90d)
+//   NOTE: Shorts watch time does NOT count toward the 4,000-hour path, so a Shorts-led
+//   channel can realistically qualify ONLY via the 10M-Shorts-views path.
+const SUBS_FULL = 1000
+const SUBS_FAN = 500
+const SHORTS_BAR_90D = 10_000_000
+const SHORTS_FAN_90D = 3_000_000
+
+function fmtShort(n: number) {
+  if (n >= 1e9) return (n / 1e9).toFixed(1).replace(/\.0$/, '') + 'B'
+  if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M'
+  if (n >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, '') + 'K'
+  return String(Math.round(n))
+}
+
+type MonSample = {
+  sampled: number
+  channelType: 'shorts' | 'longform' | 'mixed' | 'unknown'
+  shortsShare: number
+  shortsViews90d: number   // approx: sum of views on short uploads aged <= 90 days
+  windowCovered: boolean   // false if the 30-upload sample may not span the full 90d window
+}
+
+function monetizationEstimate(subs: number, s: MonSample) {
+  const reasons: { ok: boolean | null; text: string }[] = []
+  const meetsFull = subs >= SUBS_FULL
+  const meetsFan = subs >= SUBS_FAN
+  reasons.push({ ok: meetsFull, text: `${fmtShort(subs)} subscribers (1,000 needed for ad revenue)` })
+
+  // Under 500 subs you cannot start any tier.
+  if (!meetsFan) {
+    return {
+      eligible: false, likelihood: subs >= 1 ? Math.min(15, Math.round((subs / SUBS_FAN) * 15)) : 0,
+      verdict: 'Not eligible yet', primaryPath: 'Subscribers', channelType: s.channelType, reasons,
+      note: 'Needs 500+ subscribers to start, 1,000 for ad revenue. Watch hours and 90-day Shorts views are not in public data, so this is an inference, not the real status.',
+    }
+  }
+
+  const shortsDominant = s.channelType === 'shorts' || (s.channelType === 'mixed' && s.shortsShare >= 0.5)
+
+  if (shortsDominant && s.sampled > 0) {
+    const progress = s.shortsViews90d / SHORTS_BAR_90D
+    const fanProgress = s.shortsViews90d / SHORTS_FAN_90D
+    reasons.push({
+      ok: s.shortsViews90d >= SHORTS_BAR_90D,
+      text: `Shorts views ~${fmtShort(s.shortsViews90d)} in last 90d (10M needed for ads)`,
+    })
+    if (!s.windowCovered) reasons.push({ ok: null, text: 'May undercount: only recent uploads were read' })
+
+    let likelihood: number, verdict: string
+    if (meetsFull && progress >= 1) { likelihood = 90; verdict = 'Likely monetized' }
+    else if (meetsFull && progress >= 0.6) { likelihood = 60; verdict = 'Close on the Shorts path' }
+    else if (progress >= 1 && meetsFan) { likelihood = 45; verdict = 'Fan funding likely, ads need 1,000 subs' }
+    else {
+      likelihood = Math.min(35, Math.round(progress * 35))
+      verdict = fanProgress >= 1 ? 'Fan-funding tier only' : 'Unlikely yet, Shorts views below bar'
+    }
+    return {
+      eligible: meetsFull && progress >= 1, likelihood, verdict,
+      primaryPath: 'Shorts views (90d)', channelType: s.channelType, reasons,
+      note: 'Shorts-led channel: only the 10M Shorts-views/90d path applies (Shorts watch time does not count toward the 4,000-hour path). Views here are approximated from recent uploads, not the real 90-day count.',
+    }
+  }
+
+  // Long-form or unknown: gating metric is watch hours, which public data cannot measure.
+  reasons.push({ ok: null, text: 'Watch hours not measurable from public data (4,000 in 12mo needed)' })
+  if (s.channelType === 'unknown') reasons.push({ ok: null, text: 'Could not read recent uploads to classify the channel' })
+  const likelihood = s.channelType === 'unknown' ? (meetsFull ? 40 : 20) : (meetsFull ? 45 : 25)
+  const verdict = meetsFull ? 'Possibly monetized, watch hours unverifiable' : 'Fan-funding tier possible'
+  return {
+    eligible: false, likelihood, verdict,
+    primaryPath: 'Watch hours (12mo)', channelType: s.channelType, reasons,
+    note: 'Long-form channel: eligibility hinges on 4,000 public watch hours, which is not in public data. This is a subscriber-based inference only, not the real status.',
+  }
 }
 
 function scoreVideoSEO(v: any) {
@@ -72,10 +142,37 @@ async function handler(req: ExtRequest, res: NextApiResponse) {
       const monthlyViews = Math.round(ch.views / Math.max(1, ((Date.now() - new Date(ch.publishedAt).getTime()) / (30 * 864e5))))
       const estLow = Math.round(monthlyViews / 1000 * 1.5)
       const estHigh = Math.round(monthlyViews / 1000 * 4)
+
+      // Deep monetization analysis: sample recent uploads to classify the channel and
+      // approximate 90-day Shorts views, instead of guessing from subs + lifetime views.
+      // Cost: ~2 quota units (channel videos + one batchVideoStats call), no search calls.
+      let sample: MonSample = { sampled: 0, channelType: 'unknown', shortsShare: 0, shortsViews90d: 0, windowCovered: false }
+      try {
+        const recent = await getPublicChannelVideos(ch.id, 30)
+        const ids = recent.map((v: any) => v.id).filter(Boolean).slice(0, 50)
+        if (ids.length) {
+          const stats = await batchVideoStats(ids)
+          const SHORT_MAX = 180 // current Shorts ceiling (3 min); duration is our public proxy
+          const isShort = (x: any) => (x.durationSec || 0) > 0 && (x.durationSec || 0) <= SHORT_MAX
+          const sampled = stats.length
+          const shortsCount = stats.filter(isShort).length
+          const shortsShare = sampled ? shortsCount / sampled : 0
+          const shortsViews90d = stats
+            .filter((x: any) => (x.ageDays ?? 9999) <= 90 && isShort(x))
+            .reduce((sum: number, x: any) => sum + (x.views || 0), 0)
+          const oldest = stats.reduce((m: number, x: any) => Math.max(m, x.ageDays ?? 0), 0)
+          // covered if the sample reached past 90d, or we read the channel's entire catalog
+          const windowCovered = oldest >= 90 || sampled < 30
+          const channelType: MonSample['channelType'] =
+            shortsShare >= 0.6 ? 'shorts' : shortsShare <= 0.3 ? 'longform' : 'mixed'
+          sample = { sampled, channelType, shortsShare, shortsViews90d, windowCovered }
+        }
+      } catch { /* fall back to the subscriber-only estimate */ }
+
       return res.status(200).json({
         channel: ch,
         analytics: { subscribers: ch.subscribers, totalViews: ch.views, videoCount: ch.videoCount, avgViews, createdAt: ch.publishedAt, country: ch.country || 'Unknown', monthlyViews, estLow, estHigh },
-        monetization: monetizationEstimate(ch.subscribers, ch.views, ch.videoCount),
+        monetization: monetizationEstimate(ch.subscribers, sample),
       })
     }
 
