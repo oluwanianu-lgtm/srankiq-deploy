@@ -136,12 +136,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ── Google Login ──
   const loginWithGoogle = async () => {
     const provider = new GoogleAuthProvider()
+    provider.addScope('https://www.googleapis.com/auth/youtube.readonly')
     provider.setCustomParameters({ prompt: 'select_account' })
 
     const result = await signInWithPopup(auth, provider)
+    const credential = GoogleAuthProvider.credentialFromResult(result)
+    const token = credential?.accessToken
+
+    // Save YouTube token if granted
+    if (token && result.user) {
+      const ref = doc(db, 'users', result.user.uid)
+      await updateDoc(ref, {
+        'connectedPlatforms.yt': true,
+        'platformTokens.yt': token,
+      }).catch(() => {}) // May not exist yet
+    }
 
     await ensureProfile(result.user)
-    toast.success('Signed in with Google!')
+    toast.success('Signed in with Google! YouTube connected 🎉')
   }
 
   // ── Logout ──
